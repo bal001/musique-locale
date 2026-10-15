@@ -48,8 +48,11 @@ iOS 26 minimum (iPhone du propriétaire en iOS 26.7). Swift 5, SwiftUI, Observat
 - `Services/Nouveautes.swift` : nouveautés par pays = classements publics **Apple Music** (date de sortie réelle,
   6 dernières semaines, sans précommandes), retrouvées sur YouTube Music au toucher. Le flux Apple renvoie souvent
   502/504 : 4 essais + dernière liste valide gardée 3 jours.
-- `Services/ExtracteurFlux.swift` : **YouTubeKit 0.4.9** (seul fichier qui l'importe). Extraction locale sur le
-  téléphone, service distant de l'auteur en secours. Son = m4a ; clip = **HLS** (aucun mp4 combiné n'existe plus) ;
+- `Services/ExtracteurFlux.swift` : **extraction rapide d'abord** (`ExtracteurDirect`, ~0,5 s) = endpoint `player`
+  avec le client **VISIONOS** + identifiant de visiteur (`InnerTube.visiteur()`, gardé 1 jour) : liens directs sans
+  signature (son m4a, HLS, vidéo seule). Testé le 15/10/2026 : les clients IOS, ANDROID, ANDROID_VR, TV, MWEB
+  sont bloqués (PO token). **Secours : YouTubeKit 0.4.9** (~4 s ; extraction locale puis service distant de l'auteur).
+  `PrechargeurFlux` prépare à l'avance les titres suivants, les 1ers résultats et l'accueil (cache 5 h). Son = m4a ; clip = **HLS** (aucun mp4 combiné n'existe plus) ;
   clip téléchargé = vidéo seule H.264 ≤ 1080p + son, assemblés sur le téléphone sans réencodage.
 - `Services/ChargeurImages.swift` : remplace AsyncImage (qui abandonnait au défilement → images manquantes).
 - Paroles : LRCLIB (synchronisées) puis YouTube Music.

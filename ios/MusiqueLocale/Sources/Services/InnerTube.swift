@@ -32,6 +32,18 @@ struct InnerTube: Sendable {
         ["clientName": "WEB_REMIX", "clientVersion": UserDefaults.standard.string(forKey: cleVersion) ?? "1.20261013.15.00", "hl": "fr", "gl": "FR"]
     }
 
+    /// Identifiant de visiteur anonyme fourni par YouTube (gardé 1 jour), utilisé par l'extraction rapide.
+    static func visiteur() async throws -> String {
+        let defauts = UserDefaults.standard
+        if let v = defauts.string(forKey: "visiteurYT"), let d = defauts.object(forKey: "visiteurYTDate") as? Date,
+           Date.now.timeIntervalSince(d) < 86400 { return v }
+        let json = try await partage.appel("music/get_search_suggestions", ["input": "a"])
+        guard let v = ArbreJSON.valeur(json, "responseContext", "visitorData") as? String else { throw ErreurReseau.indisponible }
+        defauts.set(v, forKey: "visiteurYT")
+        defauts.set(Date.now, forKey: "visiteurYTDate")
+        return v
+    }
+
     static func actualiserVersion(forcer: Bool = false) async {
         let derniere = UserDefaults.standard.object(forKey: cleVersion + "Date") as? Date ?? .distantPast
         guard forcer || Date.now.timeIntervalSince(derniere) > 86400, let url = URL(string: "https://music.youtube.com/") else { return }

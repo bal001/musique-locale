@@ -108,5 +108,18 @@ await verifier("Outil de lecture YouTube à jour (YouTubeKit)") {
     return num(derniere).lexicographicallyPrecedes(num("0.4.9")) || derniere == "0.4.9" ? nil : "nouvelle version \(derniere) disponible (app : 0.4.9)"
 }
 
+await verifier("Lecture rapide (client visionOS, < 2 s)") {
+    let debut = Date()
+    let flux = try await ExtracteurDirect().flux(pour: "kJQP7kiw5Fk")
+    let duree = Date().timeIntervalSince(debut)
+    guard let audio = flux.audio, let hls = flux.video else { return "son ou clip manquant" }
+    var r = URLRequest(url: audio); r.setValue("bytes=0-500000", forHTTPHeaderField: "Range")
+    let code = (try await URLSession.shared.data(for: r).1 as? HTTPURLResponse)?.statusCode ?? 0
+    let codeHLS = (try await URLSession.shared.data(from: hls).1 as? HTTPURLResponse)?.statusCode ?? 0
+    if code != 206 { return "son refusé (HTTP \(code))" }
+    if codeHLS != 200 { return "clip refusé (HTTP \(codeHLS))" }
+    return duree < 2 ? nil : String(format: "trop lent (%.1f s)", duree)
+}
+
 print(echecs.isEmpty ? "\nTout fonctionne." : "\n\(echecs.count) problème(s).")
 exit(echecs.isEmpty ? 0 : 1)

@@ -19,6 +19,43 @@ enum ErreurFlux: LocalizedError {
     var errorDescription: String? { "Aucun flux lisible pour ce titre." }
 }
 
+/// Méthode rapide (~0,5 s) : le lecteur de YouTube demandé comme l'app YouTube de l'Apple Vision Pro (client VISIONOS),
+/// qui reçoit des liens prêts à lire (son, clip HLS, vidéo seule) sans page à télécharger ni signature à déchiffrer.
+/// Si YouTube la refuse un jour, `PrechargeurFlux` retombe sur YouTubeKit (~4 s).
+struct ExtracteurDirect: ExtracteurFlux {
+    private static let client: [String: Any] = ["clientName": "VISIONOS", "clientVersion": "1.02", "deviceMake": "Apple",
+                                                "deviceModel": "RealityDevice17,1", "osName": "visionOS", "osVersion": "26.5.23O471",
+                                                "hl": "fr", "gl": "FR"]
+    private static let agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
+
+    func flux(pour idVideo: String) async throws -> FluxDisponibles {
+        let visiteur = try await InnerTube.visiteur()
+        var contexte = Self.client
+        contexte["visitorData"] = visiteur
+        var requete = URLRequest(url: URL(string: "https://www.youtube.com/youtubei/v1/player?prettyPrint=false")!, timeoutInterval: 8)
+        requete.httpMethod = "POST"
+        requete.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        requete.setValue(Self.agent, forHTTPHeaderField: "User-Agent")
+        requete.setValue(visiteur, forHTTPHeaderField: "X-Goog-Visitor-Id")
+        requete.httpBody = try JSONSerialization.data(withJSONObject: ["videoId": idVideo, "context": ["client": contexte],
+                                                                       "contentCheckOk": true, "racyCheckOk": true])
+        let (donnees, _) = try await URLSession.shared.data(for: requete)
+        guard let json = try JSONSerialization.jsonObject(with: donnees) as? [String: Any],
+              (json["playabilityStatus"] as? [String: Any])?["status"] as? String == "OK",
+              let lecture = json["streamingData"] as? [String: Any] else { throw ErreurFlux.introuvable }
+        let formats = (lecture["adaptiveFormats"] as? [[String: Any]] ?? []).filter { $0["url"] is String }
+        func debit(_ f: [String: Any]) -> Int { f["bitrate"] as? Int ?? 0 }
+        let audio = formats.filter { ($0["mimeType"] as? String)?.hasPrefix("audio/mp4") == true }.max { debit($0) < debit($1) }
+        let videoSeule = formats.filter {
+            ($0["mimeType"] as? String)?.hasPrefix("video/mp4; codecs=\"avc1") == true && ($0["height"] as? Int ?? 0) <= 1080
+        }.max { ($0["height"] as? Int ?? 0, debit($0)) < ($1["height"] as? Int ?? 0, debit($1)) }
+        let hls = (lecture["hlsManifestUrl"] as? String).flatMap(URL.init(string:))
+        let urlAudio = (audio?["url"] as? String).flatMap(URL.init(string:))
+        guard urlAudio != nil || hls != nil else { throw ErreurFlux.introuvable }
+        return FluxDisponibles(audio: urlAudio, video: hls, videoSeule: (videoSeule?["url"] as? String).flatMap(URL.init(string:)))
+    }
+}
+
 /// Extraction par YouTubeKit (https://github.com/alexeichhorn/YouTubeKit), directement sur le téléphone.
 /// Le service distant de l'auteur de la bibliothèque ne sert qu'en secours, si YouTube refuse l'extraction locale.
 struct ExtracteurYouTubeKit: ExtracteurFlux {
@@ -44,18 +81,22 @@ struct ExtracteurYouTubeKit: ExtracteurFlux {
 
 /// Prépare les flux à l'avance et les garde 5 heures (les liens YouTube valent ~6 h) : le titre suivant de la file,
 /// les premiers résultats d'une recherche, les premiers titres de l'accueil démarrent alors tout de suite.
-/// Un titre touché pendant sa préparation attend celle-ci au lieu de recommencer (l'extraction prend ~4 s).
+/// Un titre touché pendant sa préparation attend celle-ci au lieu de recommencer.
 actor PrechargeurFlux {
     static let partage = PrechargeurFlux()
-    private let extracteur: any ExtracteurFlux = ExtracteurYouTubeKit()
+    private let rapide: any ExtracteurFlux = ExtracteurDirect()
+    private let secours: any ExtracteurFlux = ExtracteurYouTubeKit()
     private var connus: [String: (date: Date, flux: FluxDisponibles)] = [:]
     private var enCours: [String: Task<FluxDisponibles, Error>] = [:]
 
     func flux(pour idVideo: String) async throws -> FluxDisponibles {
         if let c = connus[idVideo], Date.now.timeIntervalSince(c.date) < 5 * 3600 { return c.flux }
         if let tache = enCours[idVideo] { return try await tache.value }
-        let extracteur = self.extracteur
-        let tache = Task { try await extracteur.flux(pour: idVideo) }
+        let (rapide, secours) = (self.rapide, self.secours)
+        let tache = Task {
+            do { return try await rapide.flux(pour: idVideo) }
+            catch { return try await secours.flux(pour: idVideo) }
+        }
         enCours[idVideo] = tache
         defer { enCours[idVideo] = nil }
         let flux = try await tache.value
