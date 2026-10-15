@@ -153,24 +153,47 @@ struct LecteurPlein: View {
 
     // MARK: Progression et commandes
 
+    /// Barre de progression comme YouTube Music : ligne fine, petit rond qui grossit au toucher,
+    /// saisissable sur toute sa hauteur ; le saut n'a lieu qu'au lâcher.
     private var progression: some View {
-        let total = max(lecteur.duree, 1)
-        return VStack(spacing: 2) {
-            Slider(
-                value: Binding(get: { glissement ?? min(lecteur.position, total) }, set: { glissement = $0 }),
-                in: 0...total,
-                onEditingChanged: { enCours in
-                    if !enCours, let g = glissement {
-                        lecteur.chercher(a: g)
-                        glissement = nil
-                    }
+        let total = lecteur.duree
+        let valeur = glissement ?? min(lecteur.position, max(total, 0))
+        return VStack(spacing: 6) {
+            GeometryReader { geo in
+                let fraction = total > 0 ? min(1, max(0, valeur / total)) : 0
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.22)).frame(height: glissement == nil ? 3 : 5)
+                    Capsule().fill(Color.white).frame(width: geo.size.width * fraction, height: glissement == nil ? 3 : 5)
+                    Circle().fill(Color.white)
+                        .frame(width: glissement == nil ? 12 : 18, height: glissement == nil ? 12 : 18)
+                        .offset(x: geo.size.width * fraction - (glissement == nil ? 6 : 9))
                 }
-            )
-            .tint(.white)
+                .frame(maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { g in
+                            guard total > 0 else { return }
+                            glissement = min(total, max(0, g.location.x / geo.size.width * total))
+                        }
+                        .onEnded { _ in
+                            if let g = glissement { lecteur.chercher(a: g) }
+                            glissement = nil
+                        }
+                )
+                .animation(.easeOut(duration: 0.15), value: glissement == nil)
+            }
+            .frame(height: 24)
+            .accessibilityElement()
+            .accessibilityLabel("Position")
+            .accessibilityValue("\(formaterDuree(valeur)) sur \(formaterDuree(total))")
+            .accessibilityAdjustableAction { sens in
+                lecteur.chercher(a: lecteur.position + (sens == .increment ? 10 : -10))
+            }
             HStack {
-                Text(formaterDuree(glissement ?? lecteur.position))
+                Text(formaterDuree(valeur))
                 Spacer()
-                Text(lecteur.duree > 0 ? formaterDuree(lecteur.duree) : "–:––")
+                Text(total > 0 ? formaterDuree(total) : "–:––")
             }
             .font(.system(size: 12, weight: .medium).monospacedDigit())
             .foregroundStyle(Palette.texte2)
