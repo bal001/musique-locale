@@ -279,6 +279,10 @@ final class Lecteur {
         tacheChargement?.cancel()
         player.replaceCurrentItem(with: nil)
         erreur = nil
+        // Remise à zéro complète : rien de l'ancien titre (durée, fin, saut) ne doit influencer la barre.
+        dureeReelle = titre.duree.map(Double.init)
+        finTraitee = false
+        sautEnCours = false
         position = depart
         duree = Double(titre.duree ?? 0)
         chargement = true
@@ -399,8 +403,10 @@ final class Lecteur {
     }
 
     private func tic(_ temps: CMTime) {
+        // Signaux d'un élément pas encore prêt (ou de l'ancien titre pendant un changement) : ignorés.
+        guard player.currentItem?.status == .readyToPlay else { return }
         let s = temps.seconds
-        if s.isFinite, !chargement, !sautEnCours { position = s }
+        if s.isFinite, !chargement, !sautEnCours { position = duree > 0 ? min(s, duree) : s }
         if Int(s) % 5 == 0 { sauverSession() }
         if let reelle = dureeReelle, reelle > 0 {
             // Vraie fin atteinte (AVPlayer, lui, croit que le titre dure deux fois plus) : titre suivant.

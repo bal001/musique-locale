@@ -49,7 +49,7 @@ struct MiniLecteur: View {
                 GeometryReader { geo in
                     Rectangle()
                         .fill(Palette.citron)
-                        .frame(width: geo.size.width * min(1, lecteur.position / max(lecteur.duree, 1)))
+                        .frame(width: lecteur.duree > 0 ? geo.size.width * min(1, max(0, lecteur.position / lecteur.duree)) : 0)
                 }
                 .frame(height: 2)
             }

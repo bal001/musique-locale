@@ -29,6 +29,7 @@ struct LecteurPlein: View {
             .padding(.bottom, 12)
             .foregroundStyle(Palette.texte)
             .background { fond(titre) }
+            .onChange(of: titre.idVideo) { _, _ in glissement = nil }   // un glissement en cours ne survit pas au changement de titre
             .sheet(item: $ongletBas) { o in
                 PanneauBas(selection: o)
                     .presentationDetents([.medium, .large])
@@ -169,7 +170,7 @@ struct LecteurPlein: View {
             HStack {
                 Text(formaterDuree(glissement ?? lecteur.position))
                 Spacer()
-                Text(formaterDuree(lecteur.duree))
+                Text(lecteur.duree > 0 ? formaterDuree(lecteur.duree) : "–:––")
             }
             .font(.system(size: 12, weight: .medium).monospacedDigit())
             .foregroundStyle(Palette.texte2)
