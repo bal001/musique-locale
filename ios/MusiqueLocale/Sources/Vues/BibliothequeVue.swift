@@ -91,6 +91,10 @@ struct BibliothequeVue: View {
                 NavigationLink(value: Route.historique) { Image(systemName: "clock.arrow.circlepath") }
                     .accessibilityLabel("Historique")
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink(value: Route.parametres) { Image(systemName: "gearshape") }
+                    .accessibilityLabel("Paramètres")
+            }
         }
         .alert("Nouvelle playlist", isPresented: $nouvelle) {
             TextField("Nom", text: $nom)

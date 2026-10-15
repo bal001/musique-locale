@@ -11,6 +11,7 @@ enum Route: Hashable {
     case classements
     case playlistPerso(UUID)
     case titresJaime
+    case parametres
 
     /// Les pages Nouveautés et Classements de YouTube Music s'ouvrent avec le choix du pays.
     static func pour(_ carte: Carte) -> Route {
@@ -34,6 +35,7 @@ extension View {
             case .classements: ClassementsVue()
             case .playlistPerso(let id): PlaylistPersoVue(id: id)
             case .titresJaime: TitresJaimeVue()
+            case .parametres: ParametresVue()
             }
         }
     }
@@ -54,6 +56,10 @@ extension View {
                 .accessibilityLabel("Musique Locale")
             }
             .sharedBackgroundVisibility(.hidden)   // pas de bulle de verre qui rognerait le logo
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink(value: Route.parametres) { Image(systemName: "gearshape") }
+                    .accessibilityLabel("Paramètres")
+            }
         }
         .toolbarTitleDisplayMode(.inline)
         .navigationTitle("")

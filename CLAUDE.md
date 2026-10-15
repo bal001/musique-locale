@@ -87,6 +87,9 @@ iOS 26 minimum (iPhone du propriétaire en iOS 26.7). Swift 5, SwiftUI, Observat
   d'attente, Télécharger (son seulement), album, artiste, Supprimer la file, Mise en veille, Je n'aime pas.
 - « Tout télécharger » : albums, playlists YouTube Music, playlists perso, Musique J'aime, Historique.
 - Accueil rechargé tout seul au retour dans l'app après 30 min (pas de tâche de fond).
+- **Paramètres** (roue ⚙️ sur l'accueil et la bibliothèque) : égaliseur 5 bandes (`Lecture/Egaliseur.swift`, tap
+  MediaToolbox + biquads vDSP, presets Basses +/++, Hip-hop…, pré-gain anti-saturation), lecture automatique, pays,
+  stockage (vider le cache d'écoute), historiques, version.
 - Bibliothèque : puces Téléchargés · Playlists · Titres · Albums · Artistes, tri, grille/liste, « Musique J'aime »,
   playlists personnelles (« + Nouveau »), albums/playlists enregistrés, artistes suivis, historique.
 - Samples : clips plein écran à la verticale, passage de 30 s, **3 clips préparés à l'avance** (démarrage instantané).

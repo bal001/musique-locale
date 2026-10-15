@@ -309,7 +309,10 @@ final class Lecteur {
                 dureeReelle = choisi.duree ?? titre.duree.map(Double.init)
                 if let d = dureeReelle, d > 0 { duree = d }
                 finTraitee = false
-                player.replaceCurrentItem(with: AVPlayerItem(url: choisi.url))
+                let item = AVPlayerItem(url: choisi.url)
+                await Egaliseur.partage.brancher(item)   // égaliseur (Paramètres) appliqué dès le début du titre
+                guard !Task.isCancelled, enCours?.idVideo == titre.idVideo else { return }
+                player.replaceCurrentItem(with: item)
                 if depart > 0 {
                     _ = await player.seek(to: CMTime(seconds: depart, preferredTimescale: 600))
                 }
