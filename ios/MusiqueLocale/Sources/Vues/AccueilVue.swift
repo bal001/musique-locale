@@ -10,6 +10,7 @@ struct AccueilVue: View {
     @State private var radios: [(graine: Titre, titres: [Titre])] = []
     @State private var chargement = false
     @State private var erreur: String?
+    @State private var derniereReco = Date.distantPast
 
     /// Un mix radio par artiste écouté récemment (dès la première écoute), précédé de « Mon supermix »
     /// (tout mélangé) quand l'app connaît assez vos goûts.
@@ -68,7 +69,12 @@ struct AccueilVue: View {
         .background(Palette.fond)
         .refreshable { await charger(); await recommander() }
         .task { if page.sections.isEmpty { await charger() } }
-        .task(id: historique.ecoutes.first?.idVideo) { await recommander() }
+        // Comme YouTube Music, l'accueil ne bouge pas pendant qu'on l'utilise (lancer un mix ne le reconstruit pas) :
+        // les recommandations se rafraîchissent au retour sur l'accueil après 15 min, ou en tirant vers le bas.
+        .task {
+            guard radios.isEmpty || Date.now.timeIntervalSince(derniereReco) > 15 * 60 else { return }
+            await recommander()
+        }
         .barreYTM()
     }
 
@@ -139,6 +145,7 @@ struct AccueilVue: View {
             return tous.sorted { $0.0 < $1.0 }.map { (graine: $0.1, titres: $0.2) }
         }
         radios = resultat
+        derniereReco = .now
         PrechargeurFlux.partage.precharger(Array(resultat.first?.titres.prefix(2) ?? []))
     }
 }

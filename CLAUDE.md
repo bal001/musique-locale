@@ -81,7 +81,7 @@ iOS 26 minimum (iPhone du propriétaire en iOS 26.7). Swift 5, SwiftUI, Observat
 - Son : pause nette quand une autre app prend le son ou le micro (vocal Snapchat, appel), **reprise automatique**
   ensuite si la musique jouait ; pause au débranchement du casque. Reprise de la file au lancement.
 
-**Erreurs déjà commises (à ne pas refaire)** : recherche qui lisait la liste des résultats au lieu de la radio ;
+**Erreurs déjà commises (à ne pas refaire)** : accueil reconstruit à chaque écoute (lancer un mix faisait sauter la page) ; recherche qui lisait la liste des résultats au lieu de la radio ;
 images vides (AsyncImage) ; tuiles en NavigationLink dans une List (flèches parasites) ; « Accès rapide » avec
 un grand vide ; nouveautés « anciennes » (dernier album de l'année ≠ récent) ; version du client figée ;
 tests dépendants de la France (le cloud GitHub est aux États-Unis).
@@ -92,7 +92,7 @@ tests dépendants de la France (le cloud GitHub est aux États-Unis).
   `.github/workflows/app-iphone.yml` : à chaque changement de `ios/MusiqueLocale`, fabrique l'IPA **non signée**
   (macos-26) et publie une version + `source.json` (format AltStore v2, `.github/source.py`) :
   `https://github.com/bal001/musique-locale/releases/latest/download/source.json`.
-- `.github/workflows/verification.yml` : 23 contrôles à chaque changement du code et à la demande (pas de vérification de nuit : le propriétaire n'en veut pas) ; échec = e-mail.
+- `.github/workflows/verification.yml` : 24 contrôles (la lecture rapide n'est qu'un avertissement sur GitHub : YouTube y traite les serveurs comme des robots ; ne pas chercher à contourner — refusé) à chaque changement du code et à la demande (pas de vérification de nuit : le propriétaire n'en veut pas) ; échec = e-mail.
 - Installation prévue : **SideStore** sur les iPhone (le sien, celui de son petit frère), qui signe et renouvelle
   sur le téléphone et lit la source ci-dessus. Voir l'état en cours dans `CLAUDE.local.md`.
 - Alternatives examinées : AltStore classique / Sideloadly (ordinateur), LiveContainer (dépend de SideStore),

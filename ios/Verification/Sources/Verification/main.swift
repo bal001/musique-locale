@@ -4,13 +4,19 @@ import Foundation
 // Sortie en erreur (code 1) au premier problème : GitHub prévient alors par e-mail.
 // Les contenus testés sont disponibles partout (les Mac de GitHub sont aux États-Unis, l'app en France).
 var echecs: [String] = []
-func verifier(_ nom: String, _ test: () async throws -> String?) async {
-    do {
-        if let probleme = try await test() { echecs.append("\(nom) : \(probleme)"); print("✗ \(nom) — \(probleme)") }
-        else { print("✓ \(nom)") }
-    } catch {
-        echecs.append("\(nom) : \(error)"); print("✗ \(nom) — \(error)")
+/// Sur GitHub (serveurs de data center, traités comme des robots par YouTube), certains contrôles ne peuvent pas
+/// réussir : ils deviennent de simples avertissements (⚠), sans échec ni e-mail.
+let dansLeCloud = ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] == "true"
+func verifier(_ nom: String, avertissementDansLeCloud: Bool = false, essais: Int = 1, _ test: () async throws -> String?) async {
+    var probleme: String?
+    for essai in 1...essais {
+        do { probleme = try await test() } catch { probleme = "\(error)" }
+        if probleme == nil { break }
+        if essai < essais { try? await Task.sleep(for: .seconds(5)) }   // sources externes capricieuses : on réessaie
     }
+    guard let probleme else { print("✓ \(nom)"); return }
+    if avertissementDansLeCloud && dansLeCloud { print("⚠ \(nom) — \(probleme) (normal depuis les serveurs de GitHub)"); return }
+    echecs.append("\(nom) : \(probleme)"); print("✗ \(nom) — \(probleme)")
 }
 
 let it = InnerTube.partage
@@ -33,7 +39,7 @@ await verifier("Page d'album") { try await it.page("MPREb_TLwxTUtg1L9").titresPr
 await verifier("Radio (recommandations)") { try await it.radio("1tClJjSEEpE").count >= 20 ? nil : "moins de 20 titres" }
 await verifier("Similaires") { try await it.similaires("1tClJjSEEpE").isEmpty ? "vide" : nil }
 await verifier("Classements France") { try await it.classements("FR").sections.isEmpty ? "vides" : nil }
-await verifier("Nouveautés France") { try await it.nouveautes(["fr"]).count >= 5 ? nil : "moins de 5 sorties" }
+await verifier("Nouveautés France", essais: 3) { try await it.nouveautes(["fr"]).count >= 5 ? nil : "moins de 5 sorties" }
 await verifier("Lecture (son + clip)") {
     let flux = try await ExtracteurYouTubeKit().flux(pour: "dQw4w9WgXcQ")
     guard let audio = flux.audio else { return "pas de son" }
@@ -73,7 +79,7 @@ await verifier("Classements États-Unis et Monde") {
     let us = try await it.classements("US"), monde = try await it.classements("ZZ")
     return us.sections.isEmpty || monde.sections.isEmpty ? "vides" : nil
 }
-await verifier("Nouveautés États-Unis et Royaume-Uni") {
+await verifier("Nouveautés États-Unis et Royaume-Uni", essais: 3) {
     let us = try await it.nouveautes(["us"]), gb = try await it.nouveautes(["gb"])
     return us.count < 5 ? "États-Unis : moins de 5" : gb.count < 3 ? "Royaume-Uni : moins de 3" : nil
 }
@@ -83,7 +89,7 @@ await verifier("Nouveautés retrouvées sur YouTube Music (album et single)") {
     return album.type == .album && !titre.idVideo.isEmpty ? nil : "résultat incorrect"
 }
 await verifier("Paroles YouTube Music") { try await it.parolesYouTubeMusic("1tClJjSEEpE") == nil ? "aucune" : nil }
-await verifier("Paroles synchronisées (LRCLIB)") {
+await verifier("Paroles synchronisées (LRCLIB)", essais: 2) {
     var r = URLRequest(url: URL(string: "https://lrclib.net/api/search?track_name=Balance%20ton%20quoi&artist_name=Ang%C3%A8le")!)
     r.setValue("MusiqueLocale-iOS/1.0", forHTTPHeaderField: "User-Agent")
     let (d, rep) = try await URLSession.shared.data(for: r)
@@ -108,7 +114,7 @@ await verifier("Outil de lecture YouTube à jour (YouTubeKit)") {
     return num(derniere).lexicographicallyPrecedes(num("0.4.9")) || derniere == "0.4.9" ? nil : "nouvelle version \(derniere) disponible (app : 0.4.9)"
 }
 
-await verifier("Lecture rapide (client visionOS, < 2 s)") {
+await verifier("Lecture rapide (client visionOS, < 2 s)", avertissementDansLeCloud: true) {
     let debut = Date()
     let flux = try await ExtracteurDirect().flux(pour: "kJQP7kiw5Fk")
     let duree = Date().timeIntervalSince(debut)
