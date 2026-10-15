@@ -17,8 +17,13 @@ git -C "$RACINE" pull --ff-only --quiet 2>&1 || echo "(pas de mise à jour récu
 
 # 2. Fabrication signée avec l'identifiant Apple gratuit.
 "$HOME/.local/xcodegen/bin/xcodegen" generate --quiet || exit 1
-xcodebuild -project MusiqueLocale.xcodeproj -scheme MusiqueLocale -destination "id=$IPHONE" \
-  -derivedDataPath build -allowProvisioningUpdates build -quiet 2>&1 | grep -E "error:" && exit 1
+if ! xcodebuild -project MusiqueLocale.xcodeproj -scheme MusiqueLocale -destination "id=$IPHONE" \
+     -derivedDataPath build -allowProvisioningUpdates build > /tmp/musiquelocale-fabrication.log 2>&1; then
+  grep -E "error:" /tmp/musiquelocale-fabrication.log | tail -5
+  echo "Fabrication impossible."
+  exit 1
+fi
+echo "App fabriquée."
 
 # 3. Installation par le Wi-Fi (jusqu'à 6 essais si l'iPhone n'est pas encore joignable).
 for essai in 1 2 3 4 5 6; do
