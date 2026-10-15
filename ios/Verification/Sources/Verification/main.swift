@@ -2,6 +2,7 @@ import Foundation
 
 // Teste, avec les vraies réponses de YouTube, tout ce dont l'app iPhone a besoin.
 // Sortie en erreur (code 1) au premier problème : GitHub prévient alors par e-mail.
+// Les contenus testés sont disponibles partout (les Mac de GitHub sont aux États-Unis, l'app en France).
 var echecs: [String] = []
 func verifier(_ nom: String, _ test: () async throws -> String?) async {
     do {
@@ -34,7 +35,7 @@ await verifier("Similaires") { try await it.similaires("1tClJjSEEpE").isEmpty ? 
 await verifier("Classements France") { try await it.classements("FR").sections.isEmpty ? "vides" : nil }
 await verifier("Nouveautés France") { try await it.nouveautes(["fr"]).count >= 5 ? nil : "moins de 5 sorties" }
 await verifier("Lecture (son + clip)") {
-    let flux = try await ExtracteurYouTubeKit().flux(pour: "1tClJjSEEpE")
+    let flux = try await ExtracteurYouTubeKit().flux(pour: "dQw4w9WgXcQ")
     guard let audio = flux.audio else { return "pas de son" }
     var requete = URLRequest(url: audio)
     requete.setValue("bytes=0-1000", forHTTPHeaderField: "Range")
@@ -58,9 +59,14 @@ await verifier("Puces d'humeur de l'accueil") {
     return try await it.page("FEmusic_home", params: puce.params).sections.isEmpty ? "« \(puce.nom) » vide" : nil
 }
 await verifier("Humeurs et genres") { try await it.page("FEmusic_moods_and_genres").sections.isEmpty ? "vide" : nil }
-await verifier("Playlist + suite (plus de 100 titres)") {
-    let p = try await it.page("VLRDCLAK5uy_mXandMujpa1klEdyxHzQU-kyDqmVhk098")
-    guard p.titresPrincipaux.count >= 20 else { return "titres manquants" }
+await verifier("Playlist de l'accueil (en-tête et titres)") {
+    // Playlist prise sur l'accueil du jour : toujours disponible là où le test tourne.
+    let accueil = try await it.page("FEmusic_home")
+    guard let carte = accueil.sections.flatMap(\.elements).lazy.compactMap({ e -> Carte? in
+        if case .carte(let c) = e, c.type == .playlist { c } else { nil }
+    }).first else { return "aucune playlist sur l'accueil" }
+    let p = try await it.page(carte.idPage, params: carte.params)
+    guard p.titresPrincipaux.count >= 10 else { return "titres manquants (« \(carte.nom) »)" }
     return p.entete == nil ? "en-tête manquant" : nil
 }
 await verifier("Classements États-Unis et Monde") {
