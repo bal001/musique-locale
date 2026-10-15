@@ -68,6 +68,7 @@ struct ToucheElement<Contenu: View>: View {
     @ViewBuilder let contenu: () -> Contenu
     @Environment(Lecteur.self) private var lecteur
     @Environment(\.noterConsultation) private var noter
+    @Environment(Navigateur.self) private var navigateur
 
     var body: some View {
         switch element {
@@ -86,9 +87,12 @@ struct ToucheElement<Contenu: View>: View {
                 } label: { contenu() }
                 .buttonStyle(.plain)
             } else {
-                NavigationLink(value: Route.pour(c)) { contenu() }
-                    .buttonStyle(.plain)
-                    .simultaneousGesture(TapGesture().onEnded { noter?(element) })
+                // Navigation globale : marche aussi dans les fenêtres du lecteur (Similaires…), où un NavigationLink est grisé.
+                Button {
+                    noter?(element)
+                    navigateur.ouvrir(Route.pour(c))
+                } label: { contenu() }
+                .buttonStyle(.plain)
             }
         }
     }

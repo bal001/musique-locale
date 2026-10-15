@@ -10,6 +10,7 @@ struct RangeeVue: View {
     var radio = false
     @Environment(Lecteur.self) private var lecteur
     @Environment(\.noterConsultation) private var noter
+    @Environment(Navigateur.self) private var navigateur
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -44,7 +45,7 @@ struct RangeeVue: View {
                 }
                 .buttonStyle(.plain)
             } else if let lien = rangee.lien {
-                NavigationLink(value: Route.page(lien)) {
+                Button { navigateur.ouvrir(Route.pour(lien)) } label: {
                     Text("Plus").font(.system(size: 13, weight: .semibold))
                         .padding(.horizontal, 12).padding(.vertical, 6)
                         .overlay(Capsule().stroke(Palette.bord, lineWidth: 1))
@@ -79,8 +80,11 @@ struct RangeeVue: View {
                     }
                     .padding(.leading, 16)
                 case .carte(let c):
-                    NavigationLink(value: Route.pour(c)) { LigneCarte(carte: c) }.buttonStyle(.plain)
-                        .simultaneousGesture(TapGesture().onEnded { noter?(e) })
+                    Button {
+                        noter?(e)
+                        navigateur.ouvrir(Route.pour(c))
+                    } label: { LigneCarte(carte: c) }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -90,7 +94,7 @@ struct RangeeVue: View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
             ForEach(rangee.elements) { e in
                 if case .carte(let c) = e {
-                    NavigationLink(value: Route.pour(c)) {
+                    Button { navigateur.ouvrir(Route.pour(c)) } label: {
                         HStack(spacing: 0) {
                             Rectangle().fill(c.couleur.map { Color(hex: $0) } ?? Palette.citron).frame(width: 6)
                             Text(c.nom).font(.system(size: 15, weight: .semibold)).lineLimit(1)
