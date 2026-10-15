@@ -20,7 +20,7 @@ Code, commentaires, interface et messages de commit en **français**. Détails p
   échapper aux robots de détection.
 - **Captures de son iPhone : une seule à la fois, quand il dit qu'il est dans l'app.** Jamais de captures en
   boucle (une capture en boucle a déjà enregistré ses messages privés).
-- **Il ne veut pas de tâche automatique sur son Mac** (renouvellement de nuit par launchd essayé puis retiré à sa demande).
+- **Il ne veut aucune tâche de nuit, ni sur son Mac ni sur GitHub** (renouvellement launchd et vérification planifiée retirés à sa demande).
 - Il dicte à l'oral : messages courts ; répondre simplement, étapes numérotées quand il doit toucher son iPhone.
 
 ## App iPhone (`ios/MusiqueLocale`)
@@ -89,7 +89,7 @@ tests dépendants de la France (le cloud GitHub est aux États-Unis).
   `.github/workflows/app-iphone.yml` : à chaque changement de `ios/MusiqueLocale`, fabrique l'IPA **non signée**
   (macos-26) et publie une version + `source.json` (format AltStore v2, `.github/source.py`) :
   `https://github.com/bal001/musique-locale/releases/latest/download/source.json`.
-- `.github/workflows/verification.yml` : 23 contrôles chaque nuit (et à chaque changement) ; échec = e-mail.
+- `.github/workflows/verification.yml` : 23 contrôles à chaque changement du code et à la demande (pas de vérification de nuit : le propriétaire n'en veut pas) ; échec = e-mail.
 - Installation prévue : **SideStore** sur les iPhone (le sien, celui de son petit frère), qui signe et renouvelle
   sur le téléphone et lit la source ci-dessus. Voir l'état en cours dans `CLAUDE.local.md`.
 - Alternatives examinées : AltStore classique / Sideloadly (ordinateur), LiveContainer (dépend de SideStore),

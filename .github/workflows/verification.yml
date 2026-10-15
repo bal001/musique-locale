@@ -1,12 +1,10 @@
-# Chaque nuit : vérifie avec les vraies réponses de YouTube que tout ce dont l'app a besoin marche
+# À chaque modification du code (et à la demande) : vérifie avec les vraies réponses de YouTube que tout ce dont l'app a besoin marche
 # (accueil, recherche, catégories, artistes, albums, playlists, radio, similaires, classements,
 # nouveautés, paroles, son, clips, version de YouTube Music, outil de lecture à jour).
 # En cas de problème, la vérification échoue et GitHub prévient par e-mail.
 name: Vérification
 
 on:
-  schedule:
-    - cron: "0 2 * * *"   # 4 h du matin (heure de Paris en été)
   workflow_dispatch:
   push:
     branches: [main]
