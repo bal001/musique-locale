@@ -29,7 +29,7 @@ jobs:
       - name: XcodeGen
         run: brew install xcodegen
 
-      - name: Fabriquer l'app (sans signature : SideStore signe sur le téléphone)
+      - name: "Fabriquer l'app, sans signature (SideStore signe sur le téléphone)"
         working-directory: ios/MusiqueLocale
         run: |
           xcodegen generate
