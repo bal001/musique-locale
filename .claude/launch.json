@@ -1,0 +1,7 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "musique-locale", "runtimeExecutable": "npm", "runtimeArgs": ["start"], "port": 4317 },
+    { "name": "musique-locale-dev", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev"], "port": 5317 }
+  ]
+}

@@ -1,0 +1,56 @@
+# Fabrique l'app iPhone dans le cloud à chaque changement, et la publie pour SideStore
+# (qui l'installe et la signe sur le téléphone, avec l'identifiant Apple de chacun).
+name: App iPhone
+
+on:
+  push:
+    branches: [main]
+    paths: ["ios/MusiqueLocale/**", ".github/workflows/app-iphone.yml", ".github/source.py"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: app-iphone
+  cancel-in-progress: true
+
+jobs:
+  fabriquer:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode le plus récent
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: XcodeGen
+        run: brew install xcodegen
+
+      - name: Fabriquer l'app (sans signature : SideStore signe sur le téléphone)
+        working-directory: ios/MusiqueLocale
+        run: |
+          xcodegen generate
+          xcodebuild -project MusiqueLocale.xcodeproj -scheme MusiqueLocale -configuration Release \
+            -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
+            MARKETING_VERSION=1.0.${{ github.run_number }} CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            build | tail -n 20
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/MusiqueLocale.app Payload/
+          zip -qry MusiqueLocale.ipa Payload
+
+      - name: Source SideStore
+        run: |
+          python3 .github/source.py "${{ github.repository }}" "1.0.${{ github.run_number }}" "${{ github.run_number }}" \
+            ios/MusiqueLocale/MusiqueLocale.ipa > source.json
+
+      - name: Publier la version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v1.0.${{ github.run_number }}" ios/MusiqueLocale/MusiqueLocale.ipa source.json \
+            --title "Musique Locale 1.0.${{ github.run_number }}" \
+            --notes "${{ github.event.head_commit.message || 'Nouvelle version' }}" --latest

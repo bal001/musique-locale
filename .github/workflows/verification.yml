@@ -1,0 +1,25 @@
+# Chaque nuit : vérifie avec les vraies réponses de YouTube que tout ce dont l'app a besoin marche
+# (accueil, recherche, catégories, artistes, albums, playlists, radio, similaires, classements,
+# nouveautés, paroles, son, clips, version de YouTube Music, outil de lecture à jour).
+# En cas de problème, la vérification échoue et GitHub prévient par e-mail.
+name: Vérification
+
+on:
+  schedule:
+    - cron: "0 2 * * *"   # 4 h du matin (heure de Paris en été)
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["ios/MusiqueLocale/Sources/**", "ios/Verification/**"]
+
+jobs:
+  verifier:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Tout vérifier avec YouTube
+        working-directory: ios/Verification
+        run: swift run -c release

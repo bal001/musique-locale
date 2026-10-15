@@ -1,0 +1,11 @@
+node_modules/
+dist/
+donnees/
+musique/
+.DS_Store
+build-app/
+ios/MusiqueLocale/build/
+ios/MusiqueLocale/MusiqueLocale.xcodeproj/
+outils/
+analyse-rea/
+.build/

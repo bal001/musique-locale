@@ -1,0 +1,40 @@
+# Projet XcodeGen de l'app iPhone « Musique Locale ».
+# Générer le .xcodeproj (une fois Xcode installé) :
+#   cd ios/MusiqueLocale && xcodegen generate && open MusiqueLocale.xcodeproj
+name: MusiqueLocale
+options:
+  bundleIdPrefix: local.alec
+  deploymentTarget:
+    iOS: "26.0"
+  developmentLanguage: fr
+  createIntermediateGroups: true
+
+packages:
+  # Extraction des flux YouTube (voir Sources/Services/ExtracteurFlux.swift).
+  YouTubeKit:
+    url: https://github.com/alexeichhorn/YouTubeKit
+    exactVersion: "0.4.9"
+
+targets:
+  MusiqueLocale:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      - path: Resources
+    dependencies:
+      - package: YouTubeKit
+    settings:
+      base:
+        PRODUCT_NAME: MusiqueLocale
+        PRODUCT_BUNDLE_IDENTIFIER: local.alec.musiquelocale
+        INFOPLIST_FILE: Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 2VA3NRQ4VQ # équipe personnelle gratuite (Alexandre Di mascio)
