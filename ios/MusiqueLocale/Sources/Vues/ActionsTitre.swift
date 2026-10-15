@@ -64,11 +64,6 @@ struct FeuilleTitre: View {
                 } else {
                     ligne("Télécharger", "arrow.down.to.line") { telechargements.telecharger(titre, type: .audio) }
                 }
-                if telechargements.estTelecharge(titre.idVideo, .clip) {
-                    ligne("Supprimer le clip téléchargé", "trash", danger: true) { telechargements.supprimer(titre.idVideo, .clip) }
-                } else {
-                    ligne("Télécharger le clip", "film") { telechargements.telecharger(titre, type: .clip) }
-                }
                 if let id = titre.idAlbum {
                     ligne("Accéder à l'album", "square.stack") {
                         navigateur.ouvrir(.page(Carte(idPage: id, type: .album, nom: titre.album ?? "Album")))

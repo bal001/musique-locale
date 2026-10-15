@@ -76,11 +76,11 @@ iOS 26 minimum (iPhone du propriétaire en iOS 26.7). Swift 5, SwiftUI, Observat
   jamais un titre 👎 ou zappé (< 30 s), ni écouté récemment, ni autre version du même morceau (slowed, remix…),
   ni un artiste zappé bien plus qu'écouté ; graine = dernier titre écouté jusqu'au bout ou aimé. Profil par
   artiste (écoutes complètes, > 1 min, zaps, J'aime, demi-vie 14 jours), gardé sur le téléphone.
-- Lecteur : bascule 🎧/▶ (titre/clip), AirPlay, ⋮, titre « › » vers l'artiste, bulles 👍|👎 · Enregistrer ·
+- Lecteur : **pas de vidéo** (version 🎧 et pochette seulement, à la demande du propriétaire), AirPlay, ⋮, titre « › » vers l'artiste, bulles 👍|👎 · Enregistrer ·
   Télécharger · Partager, aléatoire, répéter, À SUIVRE · PAROLES · SIMILAIRES ; file réordonnable, « Lecture à
   partir de », interrupteur Lecture automatique, mise en veille. Mini-lecteur avec ⏮ ▶ ⏭.
 - Menu ⋮ en feuille : Lire ensuite · Enregistrer dans une playlist · Partager, puis Démarrer le mix, file
-  d'attente, Télécharger (son / clip), album, artiste, Supprimer la file, Mise en veille, Je n'aime pas.
+  d'attente, Télécharger (son seulement), album, artiste, Supprimer la file, Mise en veille, Je n'aime pas.
 - « Tout télécharger » : albums, playlists YouTube Music, playlists perso, Musique J'aime, Historique.
 - Accueil rechargé tout seul au retour dans l'app après 30 min (pas de tâche de fond).
 - Bibliothèque : puces Téléchargés · Playlists · Titres · Albums · Artistes, tri, grille/liste, « Musique J'aime »,
@@ -88,6 +88,9 @@ iOS 26 minimum (iPhone du propriétaire en iOS 26.7). Swift 5, SwiftUI, Observat
 - Samples : clips plein écran à la verticale, passage de 30 s, **3 clips préparés à l'avance** (démarrage instantané).
 - Son : pause nette quand une autre app prend le son ou le micro (vocal Snapchat, appel), **reprise automatique**
   ensuite si la musique jouait ; pause au débranchement du casque. Reprise de la file au lancement.
+
+**Durée : le lecteur d'Apple DOUBLE la durée des sons YouTube (MP4 découpé DASH) → se fier à `FluxDisponibles.duree`,
+au paramètre `dur=` du lien, ou à `Titre.duree` ; fin de titre détectée sur cette vraie durée (`Lecteur.tic`).**
 
 **Règle : jamais remplacer un contenu affiché par du vide** (réseau absent au retour dans l'app) — l'accueil est
 mémorisé (`memoireAccueil`) et restauré à l'ouverture ; les autres écrans réessaient (`avecEssais`).
@@ -103,7 +106,7 @@ tests dépendants de la France (le cloud GitHub est aux États-Unis).
   `.github/workflows/app-iphone.yml` : à chaque changement de `ios/MusiqueLocale`, fabrique l'IPA **non signée**
   (macos-26) et publie une version + `source.json` (format AltStore v2, `.github/source.py`) :
   `https://github.com/bal001/musique-locale/releases/latest/download/source.json`.
-- `.github/workflows/verification.yml` : 26 contrôles (la lecture rapide n'est qu'un avertissement sur GitHub : YouTube y traite les serveurs comme des robots ; ne pas chercher à contourner — refusé) à chaque changement du code et à la demande (pas de vérification de nuit : le propriétaire n'en veut pas) ; échec = e-mail.
+- `.github/workflows/verification.yml` : 27 contrôles (la lecture rapide n'est qu'un avertissement sur GitHub : YouTube y traite les serveurs comme des robots ; ne pas chercher à contourner — refusé) à chaque changement du code et à la demande (pas de vérification de nuit : le propriétaire n'en veut pas) ; échec = e-mail.
 - Installation prévue : **SideStore** sur les iPhone (le sien, celui de son petit frère), qui signe et renouvelle
   sur le téléphone et lit la source ci-dessus. Voir l'état en cours dans `CLAUDE.local.md`.
 - Alternatives examinées : AltStore classique / Sideloadly (ordinateur), LiveContainer (dépend de SideStore),

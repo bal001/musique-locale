@@ -8,6 +8,9 @@ struct FluxDisponibles: Sendable {
     var audio: URL?        // audio seul, m4a (AAC)
     var video: URL?        // flux HLS image + son, pour regarder le clip
     var videoSeule: URL?   // mp4 H.264 sans son (≤ 1080p), pour télécharger le clip (assemblé avec l'audio)
+    /// Vraie durée (s) donnée par YouTube. Le lecteur d'Apple DOUBLE la durée des fichiers son de YouTube
+    /// (MP4 découpé façon DASH) : 2:01 devient 4:01 ; il faut donc s'y fier, pas à AVPlayer.
+    var duree: Double? = nil
 }
 
 protocol ExtracteurFlux: Sendable {
@@ -52,7 +55,9 @@ struct ExtracteurDirect: ExtracteurFlux {
         let hls = (lecture["hlsManifestUrl"] as? String).flatMap(URL.init(string:))
         let urlAudio = (audio?["url"] as? String).flatMap(URL.init(string:))
         guard urlAudio != nil || hls != nil else { throw ErreurFlux.introuvable }
-        return FluxDisponibles(audio: urlAudio, video: hls, videoSeule: (videoSeule?["url"] as? String).flatMap(URL.init(string:)))
+        let duree = ((json["videoDetails"] as? [String: Any])?["lengthSeconds"] as? String).flatMap(Double.init)
+            ?? (audio?["approxDurationMs"] as? String).flatMap(Double.init).map { $0 / 1000 }
+        return FluxDisponibles(audio: urlAudio, video: hls, videoSeule: (videoSeule?["url"] as? String).flatMap(URL.init(string:)), duree: duree)
     }
 }
 
@@ -75,6 +80,7 @@ struct ExtracteurYouTubeKit: ExtracteurFlux {
             .max { ($0.videoResolution ?? 0) < ($1.videoResolution ?? 0) }
         let hls = try? await video.livestreams.first?.url
         guard audio != nil || hls != nil else { throw ErreurFlux.introuvable }
+        // YouTubeKit ne donne pas la durée : le lecteur se fie alors à celle de YouTube Music (Titre.duree).
         return FluxDisponibles(audio: audio?.url, video: hls, videoSeule: videoSeule?.url)
     }
 }

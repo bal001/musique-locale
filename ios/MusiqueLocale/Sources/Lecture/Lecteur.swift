@@ -59,6 +59,10 @@ final class Lecteur {
     @ObservationIgnored private var derniereBonneEcoute: Titre?   // dernier titre écouté jusqu'au bout ou aimé
     @ObservationIgnored private var tacheVeille: Task<Void, Never>?
     @ObservationIgnored private var repriseApresInterruption = false
+    /// Vraie durée du titre en cours (YouTube), prioritaire sur celle d'AVPlayer qui est doublée pour les sons YouTube.
+    @ObservationIgnored private var dureeReelle: Double?
+    @ObservationIgnored private var finTraitee = false
+    @ObservationIgnored private var sautEnCours = false
     @ObservationIgnored private var debutInterruption = Date.distantPast
 
     init(extracteur: any ExtracteurFlux, telechargements: Telechargements, historique: Historique) {
@@ -245,9 +249,18 @@ final class Lecteur {
         player.play()
     }
 
+    /// Saut dans le titre : borné à la vraie fin ; la position affichée ne bouge plus pendant le saut
+    /// (sinon la barre revenait un instant en arrière : « petits coups de bug »).
     func chercher(a secondes: Double) {
-        player.seek(to: CMTime(seconds: secondes, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
-        position = secondes
+        let fin = (dureeReelle ?? duree) > 0 ? (dureeReelle ?? duree) - 0.5 : secondes
+        let cible = max(0, min(secondes, fin))
+        sautEnCours = true
+        position = cible
+        finTraitee = false
+        player.seek(to: CMTime(seconds: cible, preferredTimescale: 600),
+                    toleranceBefore: CMTime(seconds: 0.2, preferredTimescale: 600), toleranceAfter: CMTime(seconds: 0.2, preferredTimescale: 600)) { [weak self] _ in
+            Task { @MainActor in self?.sautEnCours = false }
+        }
         majNowPlaying()
     }
 
@@ -285,6 +298,9 @@ final class Lecteur {
             do {
                 let choisi = try await source(pour: titre, video: veutVideo)
                 guard !Task.isCancelled, enCours?.idVideo == titre.idVideo else { return }
+                dureeReelle = choisi.duree ?? titre.duree.map(Double.init)
+                if let d = dureeReelle, d > 0 { duree = d }
+                finTraitee = false
                 player.replaceCurrentItem(with: AVPlayerItem(url: choisi.url))
                 if depart > 0 {
                     _ = await player.seek(to: CMTime(seconds: depart, preferredTimescale: 600))
@@ -302,18 +318,23 @@ final class Lecteur {
     }
 
     /// Fichier téléchargé d'abord ; sinon flux YouTube (mp4 si la vidéo est demandée, m4a sinon).
-    private func source(pour titre: Titre, video: Bool) async throws -> (url: URL, video: Bool, local: Bool) {
+    private func source(pour titre: Titre, video: Bool) async throws -> (url: URL, video: Bool, local: Bool, duree: Double?) {
+        let connue = titre.duree.map(Double.init)
         let local = telechargements.fichierLocal(pour: titre.idVideo)
-        if let local, local.video || !video { return (local.url, local.video, true) }
+        if let local, local.video || !video { return (local.url, local.video, true, connue) }
         do {
             let flux = try await PrechargeurFlux.partage.flux(pour: titre.idVideo)
-            if video, let hls = flux.video { return (hls, true, false) }
-            if let audio = flux.audio { return (audio, false, false) }
-            if let hls = flux.video { return (hls, true, false) }
+            // Vraie durée : YouTube, sinon le paramètre « dur= » du lien audio, sinon YouTube Music.
+            let dansLien = flux.audio.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems?
+                .first { $0.name == "dur" }?.value }.flatMap(Double.init)
+            let duree = flux.duree ?? dansLien ?? connue
+            if video, let hls = flux.video { return (hls, true, false, duree) }
+            if let audio = flux.audio { return (audio, false, false, duree) }
+            if let hls = flux.video { return (hls, true, false, duree) }
             throw ErreurFlux.introuvable
         } catch {
             // Hors ligne avec seulement l'audio téléchargé : on le lit quand même.
-            if let local { return (local.url, local.video, true) }
+            if let local { return (local.url, local.video, true, connue) }
             throw error
         }
     }
@@ -337,7 +358,8 @@ final class Lecteur {
         observateurs.append(centre.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: nil, queue: .main) { [weak self] note in
             let item = note.object as? AVPlayerItem
             MainActor.assumeIsolated {
-                guard let self, item === self.player.currentItem else { return }
+                guard let self, item === self.player.currentItem, !self.finTraitee else { return }
+                self.finTraitee = true
                 self.suivant(automatique: true)
             }
         })
@@ -378,9 +400,15 @@ final class Lecteur {
 
     private func tic(_ temps: CMTime) {
         let s = temps.seconds
-        if s.isFinite, !chargement { position = s }
+        if s.isFinite, !chargement, !sautEnCours { position = s }
         if Int(s) % 5 == 0 { sauverSession() }
-        if let d = player.currentItem?.duration.seconds, d.isFinite, d > 0, abs(d - duree) > 0.5 {
+        if let reelle = dureeReelle, reelle > 0 {
+            // Vraie fin atteinte (AVPlayer, lui, croit que le titre dure deux fois plus) : titre suivant.
+            if s.isFinite, s >= reelle - 0.3, !finTraitee, !sautEnCours, enLecture {
+                finTraitee = true
+                suivant(automatique: true)
+            }
+        } else if let d = player.currentItem?.duration.seconds, d.isFinite, d > 0, abs(d - duree) > 0.5 {
             duree = d
             majNowPlaying()
         }

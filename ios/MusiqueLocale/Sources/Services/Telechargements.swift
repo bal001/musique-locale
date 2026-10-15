@@ -67,6 +67,8 @@ final class Telechargements {
             defer { Task { await FileTelechargements.partage.sortir() } }
             do {
                 let flux = try await PrechargeurFlux.partage.flux(pour: titre.idVideo)   // déjà prêt s'il a été écouté
+                var titre = titre
+                if titre.duree == nil, let d = flux.duree { titre.duree = Int(d.rounded()) }   // vraie durée gardée pour le hors-ligne
                 guard let url = type == .audio ? flux.audio : flux.videoSeule, type == .audio || flux.audio != nil else {
                     throw ErreurFlux.introuvable
                 }

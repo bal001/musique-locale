@@ -127,6 +127,12 @@ await verifier("Lecture rapide (client visionOS, < 2 s)", avertissementDansLeClo
     return duree < 2 ? nil : String(format: "trop lent (%.1f s)", duree)
 }
 
+await verifier("Vraie durée du titre (le lecteur d'Apple la double)", avertissementDansLeCloud: true) {
+    // REMONTADA (1PLIKÉ140) dure 2:01 ; AVPlayer annonce 4:01 pour ce type de fichier.
+    let flux = try await ExtracteurDirect().flux(pour: "fznfGLNZvGc")
+    guard let d = flux.duree else { return "durée absente" }
+    return abs(d - 121) <= 2 ? nil : String(format: "durée incorrecte (%.0f s au lieu de 121)", d)
+}
 await verifier("Téléchargement par morceaux (titre complet en < 15 s)") {
     let flux = try await PrechargeurFlux.partage.flux(pour: "kJQP7kiw5Fk")
     guard let audio = flux.audio else { return "pas de son" }

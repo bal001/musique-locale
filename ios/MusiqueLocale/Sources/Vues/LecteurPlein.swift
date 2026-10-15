@@ -1,8 +1,8 @@
 import AVKit
 import SwiftUI
 
-// Lecteur plein écran comme YouTube Music : bascule Titre/Vidéo (🎧 / ▶), AirPlay, menu ⋮,
-// pochette ou clip, titre « › » (ouvre l'artiste), bulles d'actions (👍|👎, Enregistrer, Télécharger, Partager),
+// Lecteur plein écran comme YouTube Music (version 🎧 seulement, sans vidéo) : AirPlay, menu ⋮,
+// pochette, titre « › » (ouvre l'artiste), bulles d'actions (👍|👎, Enregistrer, Télécharger, Partager),
 // progression, commandes, puis À SUIVRE · PAROLES · SIMILAIRES.
 struct LecteurPlein: View {
     @Environment(Lecteur.self) private var lecteur
@@ -56,21 +56,6 @@ struct LecteurPlein: View {
             }
             .accessibilityLabel("Réduire le lecteur")
             Spacer()
-            // 🎧 Titre | ▶ Vidéo
-            HStack(spacing: 2) {
-                ForEach([ModeLecture.titre, .video]) { m in
-                    Button { withAnimation(.snappy) { lecteur.changerMode(m) } } label: {
-                        Image(systemName: m == .titre ? "headphones" : "play.rectangle.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                            .frame(width: 44, height: 30)
-                            .foregroundStyle(modeAffiche == m ? Palette.fond : Palette.texte2)
-                            .background { if modeAffiche == m { Capsule().fill(Color.white) } }
-                    }
-                    .accessibilityLabel(m == .titre ? "Titre" : "Vidéo")
-                }
-            }
-            .padding(3)
-            .background(Capsule().fill(Color.white.opacity(0.12)))
             Spacer()
             BoutonAirPlay().frame(width: 44, height: 44)
             BoutonMenu(titre: titre, taille: 18)
@@ -79,25 +64,11 @@ struct LecteurPlein: View {
         .padding(.horizontal, 12)
     }
 
-    private var modeAffiche: ModeLecture { lecteur.mode == .video ? .video : .titre }
-
-    @ViewBuilder
+    /// Pochette seulement : le propriétaire ne veut pas de vidéo dans l'app (version 🎧 uniquement).
     private func contenu(_ titre: Titre) -> some View {
-        if modeAffiche == .video {
-            if lecteur.aDeLaVideo {
-                VideoVue(player: lecteur.player)
-                    .aspectRatio(16 / 9, contentMode: .fit)
-                    .frame(maxWidth: .infinity)
-            } else if lecteur.chargement {
-                ProgressView().tint(Palette.citron)
-            } else {
-                ContentUnavailableView("Pas de vidéo", systemImage: "film", description: Text("Aucun clip lisible pour ce titre."))
-            }
-        } else {
-            Pochette(titre: titre, rayon: 10)
-                .shadow(color: .black.opacity(0.5), radius: 30, y: 12)
-                .padding(.horizontal, 24)
-        }
+        Pochette(titre: titre, rayon: 10)
+            .shadow(color: .black.opacity(0.5), radius: 30, y: 12)
+            .padding(.horizontal, 24)
     }
 
     // MARK: Titre et actions
@@ -158,7 +129,7 @@ struct LecteurPlein: View {
                 } else if telechargements.aUnTelechargement(titre.idVideo) {
                     bulle("Téléchargé", "checkmark.circle.fill") {}
                 } else {
-                    bulle("Télécharger", "arrow.down.to.line") { telechargements.telecharger(titre, type: lecteur.mode == .video ? .clip : .audio) }
+                    bulle("Télécharger", "arrow.down.to.line") { telechargements.telecharger(titre, type: .audio) }
                 }
                 ShareLink(item: URL(string: "https://music.youtube.com/watch?v=\(titre.idVideo)")!) {
                     Label("Partager", systemImage: "arrowshape.turn.up.right")
