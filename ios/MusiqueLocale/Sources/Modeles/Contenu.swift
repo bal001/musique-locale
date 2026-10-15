@@ -54,7 +54,7 @@ struct Rangee: Identifiable, Sendable {
 }
 
 /// Puce de filtre (humeurs de l'accueil, catégories de la recherche).
-struct Puce: Identifiable, Hashable, Sendable {
+struct Puce: Identifiable, Hashable, Codable, Sendable {
     var nom: String
     var params: String?
     var id: String { nom }

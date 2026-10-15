@@ -304,3 +304,12 @@ actor CacheNouveautes {
         return s.elements
     }
 }
+
+/// Réessaie une demande réseau qui échoue ou revient vide (réseau pas encore revenu à l'ouverture de l'app…).
+func avecEssais<T>(_ essais: Int = 3, vide: (T) -> Bool = { _ in false }, _ demande: () async throws -> T) async -> T? {
+    for essai in 1...essais {
+        if let r = try? await demande(), !vide(r) { return r }
+        if essai < essais { try? await Task.sleep(for: .seconds(Double(essai))) }
+    }
+    return nil
+}

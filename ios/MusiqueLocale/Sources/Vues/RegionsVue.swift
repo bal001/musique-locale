@@ -76,7 +76,7 @@ struct RangeeNouveautes: View {
         }
         .task(id: pays) {
             elements = nil
-            elements = (try? await InnerTube.partage.nouveautes(pays.codesApple)) ?? []
+            elements = await avecEssais(vide: { $0.isEmpty }) { try await InnerTube.partage.nouveautes(pays.codesApple) } ?? []
         }
     }
 }
@@ -109,7 +109,7 @@ struct NouveautesVue: View {
         .navigationTitle("Nouveautés")
         .task(id: pays) {
             elements = nil
-            elements = (try? await InnerTube.partage.nouveautes(pays.codesApple)) ?? []
+            elements = await avecEssais(vide: { $0.isEmpty }) { try await InnerTube.partage.nouveautes(pays.codesApple) } ?? []
         }
         .task { general = try? await InnerTube.partage.page("FEmusic_new_releases") }
     }
@@ -125,6 +125,10 @@ struct ClassementsVue: View {
             LazyVStack(alignment: .leading, spacing: 28) {
                 PucesPays(pays: $pays)
                 if let page {
+                    if page.sections.isEmpty {
+                        ContentUnavailableView("Classements indisponibles", systemImage: "wifi.slash",
+                                               description: Text("Tire vers le bas pour réessayer."))
+                    }
                     ForEach(page.sections) { RangeeVue(rangee: $0) }
                 } else {
                     ProgressView().tint(Palette.citron).frame(maxWidth: .infinity, minHeight: 200)
@@ -136,7 +140,7 @@ struct ClassementsVue: View {
         .navigationTitle("Classements")
         .task(id: pays) {
             page = nil
-            page = try? await InnerTube.partage.classements(pays.rawValue)
+            page = await avecEssais(vide: { $0.sections.isEmpty }) { try await InnerTube.partage.classements(pays.rawValue) } ?? PageYTM()
         }
     }
 }

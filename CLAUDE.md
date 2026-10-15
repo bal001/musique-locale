@@ -89,7 +89,10 @@ iOS 26 minimum (iPhone du propriétaire en iOS 26.7). Swift 5, SwiftUI, Observat
 - Son : pause nette quand une autre app prend le son ou le micro (vocal Snapchat, appel), **reprise automatique**
   ensuite si la musique jouait ; pause au débranchement du casque. Reprise de la file au lancement.
 
-**Erreurs déjà commises (à ne pas refaire)** : accueil reconstruit à chaque écoute (lancer un mix faisait sauter la page) ; recherche qui lisait la liste des résultats au lieu de la radio ;
+**Règle : jamais remplacer un contenu affiché par du vide** (réseau absent au retour dans l'app) — l'accueil est
+mémorisé (`memoireAccueil`) et restauré à l'ouverture ; les autres écrans réessaient (`avecEssais`).
+
+**Erreurs déjà commises (à ne pas refaire)** : rangées de l'accueil effacées par un rechargement raté ; accueil reconstruit à chaque écoute (lancer un mix faisait sauter la page) ; recherche qui lisait la liste des résultats au lieu de la radio ;
 images vides (AsyncImage) ; tuiles en NavigationLink dans une List (flèches parasites) ; NavigationLink dans les feuilles du lecteur (Similaires grisés) → toujours naviguer par `Navigateur.ouvrir` ; « Accès rapide » avec
 un grand vide ; nouveautés « anciennes » (dernier album de l'année ≠ récent) ; version du client figée ;
 tests dépendants de la France (le cloud GitHub est aux États-Unis).

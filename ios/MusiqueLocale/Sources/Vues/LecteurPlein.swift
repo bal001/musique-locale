@@ -429,7 +429,7 @@ struct SimilairesVue: View {
         }
         .task(id: titre.idVideo) {
             rangees = nil
-            rangees = (try? await InnerTube.partage.similaires(titre.idVideo)) ?? []
+            rangees = await avecEssais(vide: { $0.isEmpty }) { try await InnerTube.partage.similaires(titre.idVideo) } ?? []
         }
     }
 }

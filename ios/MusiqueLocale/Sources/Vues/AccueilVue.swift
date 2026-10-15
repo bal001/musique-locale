@@ -16,6 +16,8 @@ struct AccueilVue: View {
     @State private var aVenir: [Element] = []           // sorties annoncées (vos artistes + artistes du moment)
     @AppStorage("pays") private var pays: Pays = .france
     @Environment(\.scenePhase) private var phase
+    @State private var restaure = false
+    @State private var derniereVeille = Date.distantPast
 
     /// Un mix radio par artiste écouté récemment (dès la première écoute), précédé de « Mon supermix »
     /// (tout mélangé) quand l'app connaît assez vos goûts.
@@ -81,8 +83,15 @@ struct AccueilVue: View {
         }
         .background(Palette.fond)
         .refreshable { await charger(); await recommander(); await veiller() }
-        .task { if page.sections.isEmpty { await charger() } }
-        .task { if duNouveau.isEmpty && aVenir.isEmpty { await veiller() } }
+        // Dernier accueil connu affiché tout de suite (rien ne clignote ni ne disparaît), puis mise à jour.
+        .onAppear { if !restaure { restaurer(); restaure = true } }
+        .task {
+            if page.sections.isEmpty || Date.now.timeIntervalSince(derniereCharge) > 30 * 60 { await charger() }
+        }
+        .task {
+            guard Date.now.timeIntervalSince(derniereVeille) > 30 * 60 else { return }
+            await veiller()
+        }
         // De retour dans l'app après plus de 30 min : tout se recharge (accueil, recommandations, sorties).
         .onChange(of: phase) { _, nouvelle in
             guard nouvelle == .active, Date.now.timeIntervalSince(derniereCharge) > 30 * 60 else { return }
@@ -126,16 +135,56 @@ struct AccueilVue: View {
             if let explorer = await complement {
                 nouvelle.sections += explorer.sections.filter { $0.style != .boutons && !$0.titre.hasPrefix("Nouveaux albums") }
             }
+            // Réponse vide (réseau pas encore revenu…) : on garde ce qui est affiché.
+            guard !nouvelle.sections.isEmpty else { return }
             let puces = page.puces.isEmpty || puce == nil ? nouvelle.puces : page.puces
             page = nouvelle
             page.puces = puces
             page.suite = nil   // sans compte, la suite de l'accueil est vide
             derniereCharge = .now
+            if puce == nil { sauvegarder() }
             PrechargeurFlux.partage.precharger(Array(nouvelle.sections.first { $0.style == .grilleTitres }?.titres.prefix(2) ?? []))
             erreur = nil
         } catch {
-            erreur = "Vos téléchargements restent disponibles sans connexion."
+            if page.sections.isEmpty { erreur = "Vos téléchargements restent disponibles sans connexion." }
         }
+    }
+
+    // MARK: Mémoire de l'accueil (affichage instantané à l'ouverture)
+
+    private struct Memoire: Codable {
+        var sections: [MemoireRangee]
+        var puces: [Puce]
+        var graines: [Titre]
+        var radios: [[Titre]]
+        var duNouveau: [Element]
+        var aVenir: [Element]
+    }
+    private struct MemoireRangee: Codable {
+        var titre: String; var surtitre: String?; var style: String; var elements: [Element]; var large: Bool; var vignette: URL?
+    }
+    private static let cleMemoire = "memoireAccueil"
+
+    private func sauvegarder() {
+        let rangees = page.sections.map { MemoireRangee(titre: $0.titre, surtitre: $0.surtitre, style: "\($0.style)",
+                                                       elements: $0.elements, large: $0.large, vignette: $0.vignette) }
+        let m = Memoire(sections: rangees, puces: page.puces, graines: radios.map(\.graine), radios: radios.map(\.titres),
+                        duNouveau: duNouveau, aVenir: aVenir)
+        if let donnees = try? JSONEncoder().encode(m) { UserDefaults.standard.set(donnees, forKey: Self.cleMemoire) }
+    }
+
+    private func restaurer() {
+        guard let donnees = UserDefaults.standard.data(forKey: Self.cleMemoire),
+              let m = try? JSONDecoder().decode(Memoire.self, from: donnees) else { return }
+        let styles: [String: StyleSection] = ["carrousel": .carrousel, "grilleTitres": .grilleTitres, "liste": .liste, "boutons": .boutons]
+        if page.sections.isEmpty {
+            page.sections = m.sections.map { Rangee(titre: $0.titre, surtitre: $0.surtitre, style: styles[$0.style] ?? .carrousel,
+                                                    elements: $0.elements, large: $0.large, vignette: $0.vignette) }
+            page.puces = m.puces
+        }
+        if radios.isEmpty { radios = zip(m.graines, m.radios).map { (graine: $0, titres: $1) } }
+        if duNouveau.isEmpty { duNouveau = m.duNouveau }
+        if aVenir.isEmpty { aVenir = m.aVenir }
     }
 
     /// Veille des sorties : vos artistes (écoutes, profil, abonnements) pour « Du nouveau » ;
@@ -150,14 +199,17 @@ struct AccueilVue: View {
         async let pourVous = VeilleSorties.partage.sorties(de: vosArtistes)
         async let annonces = VeilleSorties.partage.sorties(de: Array(duPays) + vosArtistes)
         let (v, a) = await (pourVous, annonces)
-        duNouveau = v.recentes.prefix(20).map { .carte($0.carte(aVenir: false)) }
-        aVenir = a.aVenir.prefix(20).map { .carte($0.carte(aVenir: true)) }
+        // Jamais remplacé par du vide : un échec réseau garde les sorties déjà affichées.
+        if !v.recentes.isEmpty { duNouveau = v.recentes.prefix(20).map { .carte($0.carte(aVenir: false)) } }
+        if !a.aVenir.isEmpty { aVenir = a.aVenir.prefix(20).map { .carte($0.carte(aVenir: true)) } }
+        derniereVeille = .now
+        sauvegarder()
     }
 
     /// Recommandations : d'abord votre dernière écoute ; puis, quand l'app connaît assez vos goûts,
     /// vos artistes préférés (écoutes complètes, 👍, récence) pour « Mixés pour vous ».
     private func recommander() async {
-        guard let derniere = historique.ecoutes.first else { radios = []; return }
+        guard let derniere = historique.ecoutes.first else { return }
         var graines = [derniere]
         // Derniers artistes écoutés, puis (si l'app vous connaît) vos artistes préférés.
         let candidats = historique.ecoutes + (historique.profilSuffisant ? historique.artistesPreferes(4) : [])
@@ -180,8 +232,10 @@ struct AccueilVue: View {
             for await r in groupe where !r.2.isEmpty { tous.append(r) }
             return tous.sorted { $0.0 < $1.0 }.map { (graine: $0.1, titres: $0.2) }
         }
+        guard !resultat.isEmpty else { return }   // échec réseau : on garde les mixes affichés
         radios = resultat
         derniereReco = .now
+        sauvegarder()
         PrechargeurFlux.partage.precharger(Array(resultat.first?.titres.prefix(2) ?? []))
     }
 }
