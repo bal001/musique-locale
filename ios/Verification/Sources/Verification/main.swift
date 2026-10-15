@@ -127,5 +127,24 @@ await verifier("Lecture rapide (client visionOS, < 2 s)", avertissementDansLeClo
     return duree < 2 ? nil : String(format: "trop lent (%.1f s)", duree)
 }
 
+await verifier("Téléchargement par morceaux (titre complet en < 15 s)") {
+    let flux = try await PrechargeurFlux.partage.flux(pour: "kJQP7kiw5Fk")
+    guard let audio = flux.audio else { return "pas de son" }
+    let fichier = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".m4a")
+    defer { try? FileManager.default.removeItem(at: fichier) }
+    let debut = Date()
+    try await TelechargeurMorceaux.telecharger(audio, vers: fichier) { _ in }
+    let duree = Date().timeIntervalSince(debut)
+    let taille = (try FileManager.default.attributesOfItem(atPath: fichier.path)[.size] as? Int) ?? 0
+    print(String(format: "   (%.1f Mo en %.1f s)", Double(taille) / 1e6, duree))
+    if taille < 1_000_000 { return "fichier incomplet (\(taille) octets)" }
+    return duree < 15 ? nil : String(format: "trop lent (%.0f s)", duree)
+}
+await verifier("Veille des sorties (dates exactes, récentes et à venir)", essais: 2) {
+    let (recentes, _) = await VeilleSorties.partage.sorties(de: ["Jul", "Ninho", "Gims", "Tiakola", "Angèle", "Drake", "Taylor Swift"])
+    print("   récentes : " + recentes.prefix(3).map { "\($0.artiste) « \($0.nom) »" }.joined(separator: ", "))
+    return recentes.isEmpty ? "aucune sortie récente trouvée" : nil
+}
+
 print(echecs.isEmpty ? "\nTout fonctionne." : "\n\(echecs.count) problème(s).")
 exit(echecs.isEmpty ? 0 : 1)

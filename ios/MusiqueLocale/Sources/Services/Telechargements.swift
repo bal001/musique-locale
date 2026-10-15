@@ -12,33 +12,13 @@ final class Telechargements {
     private(set) var enCours: [TelechargementEnCours] = []
     var erreur: String?
 
-    private struct Tache {
-        let titre: Titre
-        let type: TypeTelechargement
-        var audio: URL? = nil   // clip : l'image arrive sans son, on y ajoute l'audio ensuite
-    }
-
-    @ObservationIgnored private let extracteur: any ExtracteurFlux
-    @ObservationIgnored private let delegue: DelegueTelechargement
-    @ObservationIgnored private let session: URLSession
-    @ObservationIgnored private var taches: [Int: Tache] = [:]
     @ObservationIgnored private let images = NSCache<NSString, UIImage>()
 
     init(extracteur: any ExtracteurFlux) {
-        let delegue = DelegueTelechargement()
-        self.extracteur = extracteur
-        self.delegue = delegue
-        // Session de premier plan : un téléchargement s'interrompt si l'app est tuée.
-        session = URLSession(configuration: .default, delegate: delegue, delegateQueue: nil)
+        // `extracteur` gardé pour la compatibilité ; les flux viennent de PrechargeurFlux (rapide + secours).
         if let donnees = try? Data(contentsOf: Stockage.index),
            let liste = try? JSONDecoder().decode([Telechargement].self, from: donnees) {
             elements = liste.filter { Stockage.existe(Stockage.url($0.fichier)) }
-        }
-        delegue.progression = { [weak self] id, fraction in
-            Task { @MainActor in self?.avancer(id, fraction) }
-        }
-        delegue.fin = { [weak self] id, resultat in
-            Task { @MainActor in self?.terminer(id, resultat) }
         }
     }
 
@@ -83,14 +63,18 @@ final class Telechargements {
         guard !estTelecharge(titre.idVideo, type), !enCours.contains(where: { $0.id == cle }) else { return }
         enCours.append(TelechargementEnCours(titre: titre, type: type, fraction: nil))
         Task {
+            await FileTelechargements.partage.entrer()
+            defer { Task { await FileTelechargements.partage.sortir() } }
             do {
                 let flux = try await PrechargeurFlux.partage.flux(pour: titre.idVideo)   // déjà prêt s'il a été écouté
                 guard let url = type == .audio ? flux.audio : flux.videoSeule, type == .audio || flux.audio != nil else {
                     throw ErreurFlux.introuvable
                 }
-                let tache = session.downloadTask(with: url)
-                taches[tache.taskIdentifier] = Tache(titre: titre, type: type, audio: type == .clip ? flux.audio : nil)
-                tache.resume()
+                let temporaire = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                try await TelechargeurMorceaux.telecharger(url, vers: temporaire) { [weak self] fraction in
+                    Task { @MainActor in self?.avancer(cle, type == .clip ? fraction * 0.85 : fraction) }
+                }
+                try await terminer(titre, type, temporaire, son: type == .clip ? flux.audio : nil)
             } catch {
                 echouer(cle, titre, error)
             }
@@ -111,35 +95,26 @@ final class Telechargements {
 
     // MARK: Suivi
 
-    private func avancer(_ idTache: Int, _ fraction: Double) {
-        guard let t = taches[idTache],
-              let i = enCours.firstIndex(where: { $0.id == Telechargement.cle(t.titre.idVideo, t.type) }) else { return }
+    private func avancer(_ cle: String, _ fraction: Double) {
+        guard let i = enCours.firstIndex(where: { $0.id == cle }) else { return }
         enCours[i].fraction = fraction
     }
 
-    private func terminer(_ idTache: Int, _ resultat: Result<URL, Error>) {
-        guard let t = taches.removeValue(forKey: idTache) else { return }
-        let cle = Telechargement.cle(t.titre.idVideo, t.type)
-        Task {
-            do {
-                let temporaire = try resultat.get()
-                let nom = "\(t.titre.idVideo).\(t.type.extensionFichier)"
-                let destination = Stockage.url(nom)
-                try? FileManager.default.removeItem(at: destination)
-                if let audio = t.audio {
-                    try await Self.assembler(image: temporaire, son: audio, vers: destination)
-                } else {
-                    try FileManager.default.moveItem(at: temporaire, to: destination)
-                }
-                await enregistrerAnnexes(t.titre)
-                elements.removeAll { $0.id == cle }
-                elements.insert(Telechargement(titre: t.titre, type: t.type, fichier: nom, date: .now), at: 0)
-                enCours.removeAll { $0.id == cle }
-                sauver()
-            } catch {
-                echouer(cle, t.titre, error)
-            }
+    private func terminer(_ titre: Titre, _ type: TypeTelechargement, _ temporaire: URL, son: URL?) async throws {
+        let cle = Telechargement.cle(titre.idVideo, type)
+        let nom = "\(titre.idVideo).\(type.extensionFichier)"
+        let destination = Stockage.url(nom)
+        try? FileManager.default.removeItem(at: destination)
+        if let son {
+            try await Self.assembler(image: temporaire, son: son, vers: destination)
+        } else {
+            try FileManager.default.moveItem(at: temporaire, to: destination)
         }
+        await enregistrerAnnexes(titre)
+        elements.removeAll { $0.id == cle }
+        elements.insert(Telechargement(titre: titre, type: type, fichier: nom, date: .now), at: 0)
+        enCours.removeAll { $0.id == cle }
+        sauver()
     }
 
     /// Clip : image (mp4 sans son) + son (m4a) réunis dans un seul mp4, sans réencodage.
@@ -147,9 +122,8 @@ final class Telechargements {
         let dossier = FileManager.default.temporaryDirectory
         let imageLocale = dossier.appendingPathComponent(UUID().uuidString + ".mp4")
         try FileManager.default.moveItem(at: image, to: imageLocale)
-        let (sonTemporaire, _) = try await URLSession.shared.download(from: distant)
         let sonLocal = dossier.appendingPathComponent(UUID().uuidString + ".m4a")
-        try FileManager.default.moveItem(at: sonTemporaire, to: sonLocal)
+        try await TelechargeurMorceaux.telecharger(distant, vers: sonLocal) { _ in }
         defer {
             try? FileManager.default.removeItem(at: imageLocale)
             try? FileManager.default.removeItem(at: sonLocal)
@@ -192,37 +166,5 @@ final class Telechargements {
     private func sauver() {
         guard let donnees = try? JSONEncoder().encode(elements) else { return }
         try? donnees.write(to: Stockage.index, options: .atomic)
-    }
-}
-
-/// Délégué URLSession : remonte la progression et déplace le fichier reçu avant que
-/// le système ne l'efface (il doit être déplacé pendant l'appel).
-final class DelegueTelechargement: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
-    var progression: (@Sendable (Int, Double) -> Void)?
-    var fin: (@Sendable (Int, Result<URL, Error>) -> Void)?
-
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
-                    totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
-        guard totalBytesExpectedToWrite > 0 else { return }
-        progression?(downloadTask.taskIdentifier, Double(totalBytesWritten) / Double(totalBytesExpectedToWrite))
-    }
-
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-        let id = downloadTask.taskIdentifier
-        if let http = downloadTask.response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            fin?(id, .failure(ErreurReseau.statut(http.statusCode)))
-            return
-        }
-        let temporaire = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        do {
-            try FileManager.default.moveItem(at: location, to: temporaire)
-            fin?(id, .success(temporaire))
-        } catch {
-            fin?(id, .failure(error))
-        }
-    }
-
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        if let error { fin?(task.taskIdentifier, .failure(error)) }
     }
 }

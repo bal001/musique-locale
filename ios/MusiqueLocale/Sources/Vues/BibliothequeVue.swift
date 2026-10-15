@@ -300,8 +300,11 @@ struct TitresVue: View {
         .navigationTitle(nom)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button { lecteur.jouer(titres.shuffled()) } label: { Label("Aléatoire", systemImage: "shuffle") }
-                    .disabled(titres.isEmpty)
+                HStack(spacing: 4) {
+                    BoutonToutTelecharger(titres: titres)
+                    Button { lecteur.jouer(titres.shuffled()) } label: { Label("Aléatoire", systemImage: "shuffle") }
+                        .disabled(titres.isEmpty)
+                }
             }
         }
     }
@@ -332,7 +335,10 @@ struct HistoriqueVue: View {
         .navigationTitle("Historique")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Effacer") { confirmer = true }.disabled(historique.ecoutes.isEmpty)
+                HStack(spacing: 4) {
+                    BoutonToutTelecharger(titres: historique.ecoutes)
+                    Button("Effacer") { confirmer = true }.disabled(historique.ecoutes.isEmpty)
+                }
             }
         }
         .confirmationDialog("Effacer tout l'historique d'écoute ?", isPresented: $confirmer, titleVisibility: .visible) {
@@ -375,6 +381,7 @@ struct PlaylistPersoVue: View {
                                 .padding(.horizontal, 18).padding(.vertical, 10)
                                 .overlay(Capsule().stroke(Palette.bord, lineWidth: 1))
                         }
+                        BoutonToutTelecharger(titres: p.titres)
                     }
                     .buttonStyle(.plain)
                     .disabled(p.titres.isEmpty)
@@ -414,5 +421,30 @@ struct PlaylistPersoVue: View {
         } else {
             ContentUnavailableView("Playlist supprimée", systemImage: "music.note.list")
         }
+    }
+}
+
+/// « Tout télécharger » : tous les titres d'une liste pour l'écoute hors ligne (cercle plein quand tout y est).
+struct BoutonToutTelecharger: View {
+    let titres: [Titre]
+    @Environment(Telechargements.self) private var telechargements
+
+    private var restants: [Titre] { titres.filter { !telechargements.aUnTelechargement($0.idVideo) } }
+    private var enCours: Int { titres.filter { telechargements.progression($0.idVideo) != nil }.count }
+
+    var body: some View {
+        Button {
+            for t in restants where telechargements.progression(t.idVideo) == nil { telechargements.telecharger(t, type: .audio) }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: restants.isEmpty ? "arrow.down.circle.fill" : "arrow.down.circle").font(.system(size: 22))
+                if enCours > 0 { Text("\(titres.count - restants.count)/\(titres.count)").font(.system(size: 13, weight: .semibold).monospacedDigit()) }
+            }
+            .foregroundStyle(restants.isEmpty ? Palette.citron : Palette.texte)
+            .frame(minWidth: 44, minHeight: 44)
+        }
+        .buttonStyle(.plain)
+        .disabled(titres.isEmpty || restants.isEmpty)
+        .accessibilityLabel(restants.isEmpty ? "Tout est téléchargé" : "Tout télécharger (\(restants.count) titres)")
     }
 }

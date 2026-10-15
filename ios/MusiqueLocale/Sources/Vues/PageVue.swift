@@ -111,16 +111,7 @@ struct PageVue: View {
                     .overlay(Capsule().stroke(Palette.bord, lineWidth: 1))
             }
             boutonEnregistrer(artiste: radio)
-            if !radio {
-                Button {
-                    for t in titres { telechargements.telecharger(t, type: .audio) }
-                } label: {
-                    Image(systemName: titres.allSatisfy { telechargements.aUnTelechargement($0.idVideo) } ? "arrow.down.circle.fill" : "arrow.down.circle")
-                        .font(.system(size: 24))
-                        .frame(width: 44, height: 44)
-                }
-                .accessibilityLabel("Tout télécharger")
-            }
+            if !radio { BoutonToutTelecharger(titres: titres) }
         }
         .buttonStyle(.plain)
         .disabled(titres.isEmpty)

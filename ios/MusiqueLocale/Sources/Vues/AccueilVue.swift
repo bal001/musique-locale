@@ -11,6 +11,11 @@ struct AccueilVue: View {
     @State private var chargement = false
     @State private var erreur: String?
     @State private var derniereReco = Date.distantPast
+    @State private var derniereCharge = Date.distantPast
+    @State private var duNouveau: [Element] = []        // sorties récentes de vos artistes
+    @State private var aVenir: [Element] = []           // sorties annoncées (vos artistes + artistes du moment)
+    @AppStorage("pays") private var pays: Pays = .france
+    @Environment(\.scenePhase) private var phase
 
     /// Un mix radio par artiste écouté récemment (dès la première écoute), précédé de « Mon supermix »
     /// (tout mélangé) quand l'app connaît assez vos goûts.
@@ -32,6 +37,9 @@ struct AccueilVue: View {
                 puces
                 if puce == nil {
                     MixesPourVous(mixes: mixes)
+                    if !duNouveau.isEmpty {
+                        RangeeVue(rangee: Rangee(titre: "Du nouveau chez vos artistes", surtitre: "Sorties récentes", style: .carrousel, elements: duNouveau))
+                    }
                     if let r = radios.first, !r.titres.isEmpty {
                         RangeeVue(rangee: Rangee(titre: r.graine.nom, surtitre: "Parce que vous avez écouté", style: .grilleTitres,
                                                  elements: r.titres.map(Element.titre)))
@@ -40,7 +48,12 @@ struct AccueilVue: View {
                 ForEach(Array(page.sections.enumerated()), id: \.element.id) { i, rangee in
                     RangeeVue(rangee: rangee)
                     if puce == nil {
-                        if i == 1 { RangeeNouveautes() }
+                        if i == 1 {
+                            RangeeNouveautes()
+                            if !aVenir.isEmpty {
+                                RangeeVue(rangee: Rangee(titre: "À venir", surtitre: "Sorties annoncées", style: .carrousel, elements: aVenir))
+                            }
+                        }
                         if i == 3, radios.count > 2, let r = radios.last {
                             RangeeVue(rangee: Rangee(titre: r.graine.artiste, surtitre: "Dans le style de", style: .grilleTitres,
                                                      elements: r.titres.map(Element.titre)))
@@ -67,8 +80,14 @@ struct AccueilVue: View {
             .padding(.vertical, 8)
         }
         .background(Palette.fond)
-        .refreshable { await charger(); await recommander() }
+        .refreshable { await charger(); await recommander(); await veiller() }
         .task { if page.sections.isEmpty { await charger() } }
+        .task { if duNouveau.isEmpty && aVenir.isEmpty { await veiller() } }
+        // De retour dans l'app après plus de 30 min : tout se recharge (accueil, recommandations, sorties).
+        .onChange(of: phase) { _, nouvelle in
+            guard nouvelle == .active, Date.now.timeIntervalSince(derniereCharge) > 30 * 60 else { return }
+            Task { await charger(); await recommander(); await veiller() }
+        }
         // Comme YouTube Music, l'accueil ne bouge pas pendant qu'on l'utilise (lancer un mix ne le reconstruit pas) :
         // les recommandations se rafraîchissent au retour sur l'accueil après 15 min, ou en tirant vers le bas.
         .task {
@@ -111,11 +130,28 @@ struct AccueilVue: View {
             page = nouvelle
             page.puces = puces
             page.suite = nil   // sans compte, la suite de l'accueil est vide
+            derniereCharge = .now
             PrechargeurFlux.partage.precharger(Array(nouvelle.sections.first { $0.style == .grilleTitres }?.titres.prefix(2) ?? []))
             erreur = nil
         } catch {
             erreur = "Vos téléchargements restent disponibles sans connexion."
         }
+    }
+
+    /// Veille des sorties : vos artistes (écoutes, profil, abonnements) pour « Du nouveau » ;
+    /// eux + les artistes les plus écoutés du pays pour « À venir ».
+    private func veiller() async {
+        var vosArtistes = historique.artistesPreferes(15).map(\.artiste)
+        vosArtistes += historique.enregistres.filter { $0.type == .artiste }.map(\.nom)
+        vosArtistes += historique.ecoutes.prefix(20).map(\.artiste)
+        vosArtistes = vosArtistes.map { $0.components(separatedBy: CharacterSet(charactersIn: ",&")).first ?? $0 }
+        let duPays = ((try? await InnerTube.partage.classements(pays.rawValue))?.sections ?? []).flatMap(\.elements)
+            .compactMap { e -> String? in if case .carte(let c) = e, c.type == .artiste { c.nom } else { nil } }.prefix(25)
+        async let pourVous = VeilleSorties.partage.sorties(de: vosArtistes)
+        async let annonces = VeilleSorties.partage.sorties(de: Array(duPays) + vosArtistes)
+        let (v, a) = await (pourVous, annonces)
+        duNouveau = v.recentes.prefix(20).map { .carte($0.carte(aVenir: false)) }
+        aVenir = a.aVenir.prefix(20).map { .carte($0.carte(aVenir: true)) }
     }
 
     /// Recommandations : d'abord votre dernière écoute ; puis, quand l'app connaît assez vos goûts,

@@ -56,6 +56,12 @@ iOS 26 minimum (iPhone du propriétaire en iOS 26.7). Swift 5, SwiftUI, Observat
   clip téléchargé = vidéo seule H.264 ≤ 1080p + son, assemblés sur le téléphone sans réencodage.
 - `Services/ChargeurImages.swift` : remplace AsyncImage (qui abandonnait au défilement → images manquantes).
 - Paroles : LRCLIB (synchronisées) puis YouTube Music.
+- `Services/VeilleSorties.swift` : sorties **datées** (annuaire iTunes : search musicArtist puis lookup albums,
+  précommandes comprises) → « Du nouveau chez vos artistes » (21 derniers jours) et « À venir » (4 mois), pour les
+  artistes du profil + suivis + 25 artistes du moment du pays ; 12 h de mémoire par artiste ; doublons retirés.
+- `Services/TelechargeurMorceaux.swift` : téléchargements **par plages de 2 Mo, 4 à la fois** (un GET complet est
+  bridé à ~25 Ko/s par YouTube : 2 min 30 par titre ; par morceaux : 0,2 s) ; 3 titres au plus en même temps.
+- Téléchargements stockés **dans l'iPhone** (Application Support de l'app), jamais sur un serveur ni le Mac.
 
 **Comportements voulus (calqués sur YouTube Music, étudiés sur son téléphone)**
 - Onglets **Accueil · Samples · Rechercher · Bibliothèque** ; logo à nous (citron #D1FE17 sur noir), pas celui de YouTube.
@@ -75,6 +81,8 @@ iOS 26 minimum (iPhone du propriétaire en iOS 26.7). Swift 5, SwiftUI, Observat
   partir de », interrupteur Lecture automatique, mise en veille. Mini-lecteur avec ⏮ ▶ ⏭.
 - Menu ⋮ en feuille : Lire ensuite · Enregistrer dans une playlist · Partager, puis Démarrer le mix, file
   d'attente, Télécharger (son / clip), album, artiste, Supprimer la file, Mise en veille, Je n'aime pas.
+- « Tout télécharger » : albums, playlists YouTube Music, playlists perso, Musique J'aime, Historique.
+- Accueil rechargé tout seul au retour dans l'app après 30 min (pas de tâche de fond).
 - Bibliothèque : puces Téléchargés · Playlists · Titres · Albums · Artistes, tri, grille/liste, « Musique J'aime »,
   playlists personnelles (« + Nouveau »), albums/playlists enregistrés, artistes suivis, historique.
 - Samples : clips plein écran à la verticale, passage de 30 s, **3 clips préparés à l'avance** (démarrage instantané).
@@ -92,7 +100,7 @@ tests dépendants de la France (le cloud GitHub est aux États-Unis).
   `.github/workflows/app-iphone.yml` : à chaque changement de `ios/MusiqueLocale`, fabrique l'IPA **non signée**
   (macos-26) et publie une version + `source.json` (format AltStore v2, `.github/source.py`) :
   `https://github.com/bal001/musique-locale/releases/latest/download/source.json`.
-- `.github/workflows/verification.yml` : 24 contrôles (la lecture rapide n'est qu'un avertissement sur GitHub : YouTube y traite les serveurs comme des robots ; ne pas chercher à contourner — refusé) à chaque changement du code et à la demande (pas de vérification de nuit : le propriétaire n'en veut pas) ; échec = e-mail.
+- `.github/workflows/verification.yml` : 26 contrôles (la lecture rapide n'est qu'un avertissement sur GitHub : YouTube y traite les serveurs comme des robots ; ne pas chercher à contourner — refusé) à chaque changement du code et à la demande (pas de vérification de nuit : le propriétaire n'en veut pas) ; échec = e-mail.
 - Installation prévue : **SideStore** sur les iPhone (le sien, celui de son petit frère), qui signe et renouvelle
   sur le téléphone et lit la source ci-dessus. Voir l'état en cours dans `CLAUDE.local.md`.
 - Alternatives examinées : AltStore classique / Sideloadly (ordinateur), LiveContainer (dépend de SideStore),
