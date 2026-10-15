@@ -61,6 +61,10 @@ iOS 26 minimum (iPhone du propriétaire en iOS 26.7). Swift 5, SwiftUI, Observat
   artistes du profil + suivis + 25 artistes du moment du pays ; 12 h de mémoire par artiste ; doublons retirés.
 - `Services/TelechargeurMorceaux.swift` : téléchargements **par plages de 2 Mo, 4 à la fois** (un GET complet est
   bridé à ~25 Ko/s par YouTube : 2 min 30 par titre ; par morceaux : 0,2 s) ; 3 titres au plus en même temps.
+- `Services/CacheEcoute.swift` : **lecture depuis le téléphone** — lu en continu, un son YouTube est bridé et AVPlayer
+  attendait 11 à 16 s (mesuré sur l'iPhone) ; le titre est récupéré entier par morceaux (~2,5 s) puis lu localement,
+  les 2 suivants de la file à l'avance (changement de titre ~0,1 s). Chronomètre `⏱` dans les journaux
+  (`xcrun devicectl device process launch --console …`).
 - Téléchargements stockés **dans l'iPhone** (Application Support de l'app), jamais sur un serveur ni le Mac.
 
 **Comportements voulus (calqués sur YouTube Music, étudiés sur son téléphone)**

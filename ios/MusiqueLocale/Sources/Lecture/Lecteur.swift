@@ -63,6 +63,7 @@ final class Lecteur {
     @ObservationIgnored private var dureeReelle: Double?
     @ObservationIgnored private var finTraitee = false
     @ObservationIgnored private var sautEnCours = false
+    @ObservationIgnored private var chronoDebut = Date()   // diagnostic : temps de changement de titre
     @ObservationIgnored private var debutInterruption = Date.distantPast
 
     init(extracteur: any ExtracteurFlux, telechargements: Telechargements, historique: Historique) {
@@ -118,7 +119,7 @@ final class Lecteur {
             }
             file += nouveaux
             ajoutsAuto += nouveaux.count
-            PrechargeurFlux.partage.precharger(Array(file.dropFirst(index + 1).prefix(2)))
+            CacheEcoute.partage.precharger(Array(file.dropFirst(index + 1).prefix(2)))
         }
     }
 
@@ -276,6 +277,8 @@ final class Lecteur {
 
     private func charger(depart: Double = 0, video: Bool = false, nouvelleEcoute: Bool = true) {
         guard let titre = enCours else { return }
+        chronoDebut = .now
+        print("⏱ titre demandé : \(titre.nom)")
         tacheChargement?.cancel()
         player.replaceCurrentItem(with: nil)
         erreur = nil
@@ -294,13 +297,14 @@ final class Lecteur {
         }
         majNowPlaying()
         sauverSession()
-        // Les 2 titres suivants se préparent pendant l'écoute : « suivant » démarre tout de suite.
-        PrechargeurFlux.partage.precharger(Array(file.dropFirst(index + 1).prefix(2)))
+        // Les 2 titres suivants sont récupérés pendant l'écoute : « suivant » démarre tout de suite.
+        CacheEcoute.partage.precharger(Array(file.dropFirst(index + 1).prefix(2)))
 
         let veutVideo = video || mode == .video
         tacheChargement = Task {
             do {
                 let choisi = try await source(pour: titre, video: veutVideo)
+                print("⏱ lien prêt après \(String(format: "%.2f", Date().timeIntervalSince(chronoDebut))) s (\(choisi.local ? "fichier téléchargé" : "YouTube"))")
                 guard !Task.isCancelled, enCours?.idVideo == titre.idVideo else { return }
                 dureeReelle = choisi.duree ?? titre.duree.map(Double.init)
                 if let d = dureeReelle, d > 0 { duree = d }
@@ -333,7 +337,14 @@ final class Lecteur {
                 .first { $0.name == "dur" }?.value }.flatMap(Double.init)
             let duree = flux.duree ?? dansLien ?? connue
             if video, let hls = flux.video { return (hls, true, false, duree) }
-            if let audio = flux.audio { return (audio, false, false, duree) }
+            if let audio = flux.audio {
+                // Titre récupéré entier par morceaux puis lu depuis le téléphone (voir CacheEcoute) ;
+                // en cas d'échec, lecture en continu classique.
+                if let fichier = try? await CacheEcoute.partage.fichier(pour: titre.idVideo, depuis: audio) {
+                    return (fichier, false, false, duree)
+                }
+                return (audio, false, false, duree)
+            }
             if let hls = flux.video { return (hls, true, false, duree) }
             throw ErreurFlux.introuvable
         } catch {
@@ -352,8 +363,13 @@ final class Lecteur {
         }
         observateurStatut = player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] joueur, _ in
             let lit = joueur.timeControlStatus != .paused
+            let joue = joueur.timeControlStatus == .playing
+            let attente = joueur.reasonForWaitingToPlay?.rawValue
             Task { @MainActor in
-                guard let self, self.enLecture != lit else { return }
+                guard let self else { return }
+                if joue { print("⏱ SON DÉMARRÉ après \(String(format: "%.2f", Date().timeIntervalSince(self.chronoDebut))) s") }
+                else if let attente { print("⏱ le lecteur attend : \(attente)") }
+                guard self.enLecture != lit else { return }
                 self.enLecture = lit
                 self.majNowPlaying()
             }

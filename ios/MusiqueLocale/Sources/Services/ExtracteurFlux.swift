@@ -100,8 +100,17 @@ actor PrechargeurFlux {
         if let tache = enCours[idVideo] { return try await tache.value }
         let (rapide, secours) = (self.rapide, self.secours)
         let tache = Task {
-            do { return try await rapide.flux(pour: idVideo) }
-            catch { return try await secours.flux(pour: idVideo) }
+            let debut = Date()
+            do {
+                let f = try await rapide.flux(pour: idVideo)
+                print("⏱ flux \(idVideo) méthode rapide \(String(format: "%.2f", Date().timeIntervalSince(debut))) s")
+                return f
+            } catch {
+                print("⏱ flux \(idVideo) méthode rapide REFUSÉE (\(error)) → secours")
+                let f = try await secours.flux(pour: idVideo)
+                print("⏱ flux \(idVideo) secours YouTubeKit \(String(format: "%.2f", Date().timeIntervalSince(debut))) s")
+                return f
+            }
         }
         enCours[idVideo] = tache
         defer { enCours[idVideo] = nil }
