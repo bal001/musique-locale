@@ -105,6 +105,7 @@ struct AccueilVue: View {
             page = nouvelle
             page.puces = puces
             page.suite = nil   // sans compte, la suite de l'accueil est vide
+            PrechargeurFlux.partage.precharger(Array(nouvelle.sections.first { $0.style == .grilleTitres }?.titres.prefix(2) ?? []))
             erreur = nil
         } catch {
             erreur = "Vos téléchargements restent disponibles sans connexion."
@@ -138,5 +139,6 @@ struct AccueilVue: View {
             return tous.sorted { $0.0 < $1.0 }.map { (graine: $0.1, titres: $0.2) }
         }
         radios = resultat
+        PrechargeurFlux.partage.precharger(Array(resultat.first?.titres.prefix(2) ?? []))
     }
 }

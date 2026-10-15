@@ -41,3 +41,40 @@ struct ExtracteurYouTubeKit: ExtracteurFlux {
         return FluxDisponibles(audio: audio?.url, video: hls, videoSeule: videoSeule?.url)
     }
 }
+
+/// Prépare les flux à l'avance et les garde 5 heures (les liens YouTube valent ~6 h) : le titre suivant de la file,
+/// les premiers résultats d'une recherche, les premiers titres de l'accueil démarrent alors tout de suite.
+/// Un titre touché pendant sa préparation attend celle-ci au lieu de recommencer (l'extraction prend ~4 s).
+actor PrechargeurFlux {
+    static let partage = PrechargeurFlux()
+    private let extracteur: any ExtracteurFlux = ExtracteurYouTubeKit()
+    private var connus: [String: (date: Date, flux: FluxDisponibles)] = [:]
+    private var enCours: [String: Task<FluxDisponibles, Error>] = [:]
+
+    func flux(pour idVideo: String) async throws -> FluxDisponibles {
+        if let c = connus[idVideo], Date.now.timeIntervalSince(c.date) < 5 * 3600 { return c.flux }
+        if let tache = enCours[idVideo] { return try await tache.value }
+        let extracteur = self.extracteur
+        let tache = Task { try await extracteur.flux(pour: idVideo) }
+        enCours[idVideo] = tache
+        defer { enCours[idVideo] = nil }
+        let flux = try await tache.value
+        connus[idVideo] = (.now, flux)
+        if connus.count > 200, let ancien = connus.min(by: { $0.value.date < $1.value.date })?.key { connus[ancien] = nil }
+        return flux
+    }
+
+    /// Lance la préparation sans attendre (3 titres au plus à la fois, pour ne pas encombrer la connexion).
+    nonisolated func precharger(_ titres: [Titre]) {
+        Task {
+            for lot in stride(from: 0, to: min(titres.count, 6), by: 3).map({ Array(titres[$0..<min($0 + 3, titres.count, 6)]) }) {
+                await withTaskGroup(of: Void.self) { groupe in
+                    for t in lot { groupe.addTask { _ = try? await self.flux(pour: t.idVideo) } }
+                }
+            }
+        }
+    }
+
+    /// Lien expiré ou refusé : on oublie ce flux pour le réextraire.
+    func oublier(_ idVideo: String) { connus[idVideo] = nil }
+}

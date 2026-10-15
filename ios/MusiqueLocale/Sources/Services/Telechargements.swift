@@ -84,7 +84,7 @@ final class Telechargements {
         enCours.append(TelechargementEnCours(titre: titre, type: type, fraction: nil))
         Task {
             do {
-                let flux = try await extracteur.flux(pour: titre.idVideo)
+                let flux = try await PrechargeurFlux.partage.flux(pour: titre.idVideo)   // déjà prêt s'il a été écouté
                 guard let url = type == .audio ? flux.audio : flux.videoSeule, type == .audio || flux.audio != nil else {
                     throw ErreurFlux.introuvable
                 }

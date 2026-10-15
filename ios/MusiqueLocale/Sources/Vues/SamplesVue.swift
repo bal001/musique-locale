@@ -145,7 +145,6 @@ final class MoteurSamples {
     @ObservationIgnored private var preparations: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private var boucles: [String: Any] = [:]
     @ObservationIgnored private var ordre: [String] = []
-    @ObservationIgnored private let extracteur = ExtracteurYouTubeKit()
     private let maxEnMemoire = 5
 
     func joueur(_ id: String) -> AVPlayer? { joueurs[id] }
@@ -184,7 +183,7 @@ final class MoteurSamples {
     private func preparer(_ titre: Titre) async {
         let id = titre.idVideo
         defer { preparations[id] = nil }
-        guard let flux = try? await extracteur.flux(pour: id), let url = flux.video ?? flux.audio, !Task.isCancelled else { return }
+        guard let flux = try? await PrechargeurFlux.partage.flux(pour: id), let url = flux.video ?? flux.audio, !Task.isCancelled else { return }
         let item = AVPlayerItem(url: url)
         item.preferredForwardBufferDuration = 12
         let joueur = AVPlayer(playerItem: item)

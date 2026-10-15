@@ -53,7 +53,6 @@ final class Lecteur {
     @ObservationIgnored private var observateurs: [NSObjectProtocol] = []
     @ObservationIgnored private var observateurStatut: NSKeyValueObservation?
     @ObservationIgnored private var tacheChargement: Task<Void, Never>?
-    @ObservationIgnored private var fluxConnus: [String: FluxDisponibles] = [:]   // URLs valables ~6 h
     @ObservationIgnored private var pochette: MPMediaItemArtwork?
     @ObservationIgnored private var tacheRadio: Task<Void, Never>?
     @ObservationIgnored private var graineRadio: String?
@@ -115,6 +114,7 @@ final class Lecteur {
             }
             file += nouveaux
             ajoutsAuto += nouveaux.count
+            PrechargeurFlux.partage.precharger(Array(file.dropFirst(index + 1).prefix(2)))
         }
     }
 
@@ -277,6 +277,8 @@ final class Lecteur {
         }
         majNowPlaying()
         sauverSession()
+        // Les 2 titres suivants se préparent pendant l'écoute : « suivant » démarre tout de suite.
+        PrechargeurFlux.partage.precharger(Array(file.dropFirst(index + 1).prefix(2)))
 
         let veutVideo = video || mode == .video
         tacheChargement = Task {
@@ -304,13 +306,7 @@ final class Lecteur {
         let local = telechargements.fichierLocal(pour: titre.idVideo)
         if let local, local.video || !video { return (local.url, local.video, true) }
         do {
-            let flux: FluxDisponibles
-            if let connu = fluxConnus[titre.idVideo] {
-                flux = connu
-            } else {
-                flux = try await extracteur.flux(pour: titre.idVideo)
-                fluxConnus[titre.idVideo] = flux
-            }
+            let flux = try await PrechargeurFlux.partage.flux(pour: titre.idVideo)
             if video, let hls = flux.video { return (hls, true, false) }
             if let audio = flux.audio { return (audio, false, false) }
             if let hls = flux.video { return (hls, true, false) }
