@@ -119,7 +119,7 @@ final class Lecteur {
             }
             file += nouveaux
             ajoutsAuto += nouveaux.count
-            CacheEcoute.partage.precharger(Array(file.dropFirst(index + 1).prefix(2)))
+            CacheEcoute.partage.precharger(Array(file.dropFirst(index + 1).prefix(1)))
         }
     }
 
@@ -246,7 +246,8 @@ final class Lecteur {
 
     func reprendre() {
         guard player.currentItem != nil else { if enCours != nil { charger(depart: position) }; return }
-        try? AVAudioSession.sharedInstance().setActive(true)
+        do { try AVAudioSession.sharedInstance().setActive(true) }
+        catch { print("⏱ session audio refusée : \(error)") }
         player.play()
     }
 
@@ -297,8 +298,8 @@ final class Lecteur {
         }
         majNowPlaying()
         sauverSession()
-        // Les 2 titres suivants sont récupérés pendant l'écoute : « suivant » démarre tout de suite.
-        CacheEcoute.partage.precharger(Array(file.dropFirst(index + 1).prefix(2)))
+        // Le titre suivant est récupéré pendant l’écoute (un seul : YouTube bloque une adresse trop gourmande).
+        CacheEcoute.partage.precharger(Array(file.dropFirst(index + 1).prefix(1)))
 
         let veutVideo = video || mode == .video
         tacheChargement = Task {
@@ -310,9 +311,11 @@ final class Lecteur {
                 if let d = dureeReelle, d > 0 { duree = d }
                 finTraitee = false
                 let item = AVPlayerItem(url: choisi.url)
+                print("⏱ source : \(choisi.url.isFileURL ? "fichier" : "réseau"), égaliseur \(Egaliseur.partage.actif ? "actif" : "coupé")")
                 await Egaliseur.partage.brancher(item)   // égaliseur (Paramètres) appliqué dès le début du titre
                 guard !Task.isCancelled, enCours?.idVideo == titre.idVideo else { return }
                 player.replaceCurrentItem(with: item)
+                observerStatut(item)
                 if depart > 0 {
                     _ = await player.seek(to: CMTime(seconds: depart, preferredTimescale: 600))
                 }
@@ -342,9 +345,18 @@ final class Lecteur {
             if video, let hls = flux.video { return (hls, true, false, duree) }
             if let audio = flux.audio {
                 // Titre récupéré entier par morceaux puis lu depuis le téléphone (voir CacheEcoute) ;
-                // en cas d'échec, lecture en continu classique.
-                if let fichier = try? await CacheEcoute.partage.fichier(pour: titre.idVideo, depuis: audio) {
-                    return (fichier, false, false, duree)
+                // lien refusé (403) : nouveau lien par la méthode de secours ; sinon lecture en continu classique.
+                do { return (try await CacheEcoute.partage.fichier(pour: titre.idVideo, depuis: audio), false, false, duree) }
+                catch ErreurReseau.statut(403) {
+                    await PrechargeurFlux.partage.lienRefuse(titre.idVideo)
+                    let neuf = try await PrechargeurFlux.partage.flux(pour: titre.idVideo)
+                    guard let audio2 = neuf.audio else { throw ErreurFlux.introuvable }
+                    if let fichier = try? await CacheEcoute.partage.fichier(pour: titre.idVideo, depuis: audio2) {
+                        return (fichier, false, false, duree)
+                    }
+                    return (audio2, false, false, duree)
+                } catch {
+                    print("⏱ récupération du titre en échec : \(error)")
                 }
                 return (audio, false, false, duree)
             }
@@ -358,6 +370,15 @@ final class Lecteur {
     }
 
     // MARK: Observation du player
+
+    private var observateurItem: NSKeyValueObservation?
+    /// Diagnostic : un élément de lecture en échec est signalé dans les journaux.
+    private func observerStatut(_ item: AVPlayerItem) {
+        observateurItem = item.observe(\.status, options: [.new]) { item, _ in
+            if item.status == .failed { print("⏱ élément en échec : \(String(describing: item.error))") }
+            if item.status == .readyToPlay { print("⏱ élément prêt") }
+        }
+    }
 
     private func observer() {
         observateurTemps = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 600),

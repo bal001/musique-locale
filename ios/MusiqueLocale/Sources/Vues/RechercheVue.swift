@@ -237,7 +237,7 @@ struct RechercheVue: View {
             let page = try await InnerTube.partage.recherchePage(q, params: puce?.params)
             if puce == nil, !page.puces.isEmpty { puces = page.puces }
             resultats = page
-            PrechargeurFlux.partage.precharger(Array(page.sections.flatMap(\.titres).prefix(3)))
+            PrechargeurFlux.partage.precharger(Array(page.sections.flatMap(\.titres).prefix(1)))
         } catch {
             erreur = "Vérifie ta connexion."
         }

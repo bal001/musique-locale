@@ -94,6 +94,8 @@ actor PrechargeurFlux {
     private let secours: any ExtracteurFlux = ExtracteurYouTubeKit()
     private var connus: [String: (date: Date, flux: FluxDisponibles)] = [:]
     private var enCours: [String: Task<FluxDisponibles, Error>] = [:]
+    /// Liens de la méthode rapide refusés au téléchargement (403) : secours seul pendant 1 h.
+    private var rapideRefuseeJusqua = Date.distantPast
 
     func flux(pour idVideo: String) async throws -> FluxDisponibles {
         if let c = connus[idVideo], Date.now.timeIntervalSince(c.date) < 5 * 3600 { return c.flux }
@@ -102,6 +104,7 @@ actor PrechargeurFlux {
         let tache = Task {
             let debut = Date()
             do {
+                guard await self.rapidePermise() else { throw ErreurFlux.introuvable }
                 let f = try await rapide.flux(pour: idVideo)
                 print("⏱ flux \(idVideo) méthode rapide \(String(format: "%.2f", Date().timeIntervalSince(debut))) s")
                 return f
@@ -120,10 +123,10 @@ actor PrechargeurFlux {
         return flux
     }
 
-    /// Lance la préparation sans attendre (3 titres au plus à la fois, pour ne pas encombrer la connexion).
+    /// Lance la préparation sans attendre (2 titres au plus, l’un après l’autre : trop de demandes et YouTube bloque l’adresse du téléphone).
     nonisolated func precharger(_ titres: [Titre]) {
         Task {
-            for lot in stride(from: 0, to: min(titres.count, 6), by: 3).map({ Array(titres[$0..<min($0 + 3, titres.count, 6)]) }) {
+            for lot in stride(from: 0, to: min(titres.count, 2), by: 1).map({ Array(titres[$0..<min($0 + 1, titres.count, 2)]) }) {
                 await withTaskGroup(of: Void.self) { groupe in
                     for t in lot { groupe.addTask { _ = try? await self.flux(pour: t.idVideo) } }
                 }
@@ -133,4 +136,15 @@ actor PrechargeurFlux {
 
     /// Lien expiré ou refusé : on oublie ce flux pour le réextraire.
     func oublier(_ idVideo: String) { connus[idVideo] = nil }
+
+    private func rapidePermise() -> Bool { Date.now >= rapideRefuseeJusqua }
+
+    /// YouTube refuse de servir les liens de la méthode rapide à ce téléphone (403 sur googlevideo) :
+    /// on oublie tous les liens rapides et on passe par YouTubeKit pendant 1 h.
+    func lienRefuse(_ idVideo: String) {
+        guard rapidePermise() else { connus[idVideo] = nil; return }
+        print("⏱ liens rapides refusés par YouTube → secours YouTubeKit pendant 1 h")
+        rapideRefuseeJusqua = Date.now.addingTimeInterval(3600)
+        connus.removeAll()
+    }
 }

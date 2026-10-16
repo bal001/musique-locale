@@ -2,7 +2,7 @@ import Foundation
 
 // Écoute sans attente : lu « en continu » d'un seul tenant, un son YouTube est bridé par YouTube et le lecteur
 // d'Apple attend 10 à 16 s avant de démarrer (mesuré sur l'iPhone, « WaitingToMinimizeStalls »). On récupère donc le
-// titre entier par morceaux (~1 s, TelechargeurMorceaux) et on le lit depuis le téléphone ; les 2 titres suivants
+// titre entier par morceaux (~1 s, TelechargeurMorceaux) et on le lit depuis le téléphone ; le titre suivant
 // de la file sont récupérés à l'avance. Fichiers temporaires (Caches), 80 au plus, les plus anciens effacés.
 actor CacheEcoute {
     static let partage = CacheEcoute()
@@ -38,9 +38,11 @@ actor CacheEcoute {
     /// Récupère à l'avance les titres suivants (lien puis fichier), sans attendre.
     nonisolated func precharger(_ titres: [Titre]) {
         Task {
-            for t in titres.prefix(2) {
+            for t in titres.prefix(1) {
                 guard let flux = try? await PrechargeurFlux.partage.flux(pour: t.idVideo), let audio = flux.audio else { continue }
-                _ = try? await self.fichier(pour: t.idVideo, depuis: audio)
+                do { _ = try await self.fichier(pour: t.idVideo, depuis: audio) }
+                catch ErreurReseau.statut(403) { await PrechargeurFlux.partage.lienRefuse(t.idVideo) }
+                catch {}
             }
         }
     }

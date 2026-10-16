@@ -66,17 +66,25 @@ final class Telechargements {
             await FileTelechargements.partage.entrer()
             defer { Task { await FileTelechargements.partage.sortir() } }
             do {
-                let flux = try await PrechargeurFlux.partage.flux(pour: titre.idVideo)   // déjà prêt s'il a été écouté
-                var titre = titre
-                if titre.duree == nil, let d = flux.duree { titre.duree = Int(d.rounded()) }   // vraie durée gardée pour le hors-ligne
-                guard let url = type == .audio ? flux.audio : flux.videoSeule, type == .audio || flux.audio != nil else {
-                    throw ErreurFlux.introuvable
+                // Lien refusé par YouTube (403) : un 2e essai avec un lien de la méthode de secours.
+                for essai in 1...2 {
+                    do {
+                        let flux = try await PrechargeurFlux.partage.flux(pour: titre.idVideo)   // déjà prêt s'il a été écouté
+                        var titre = titre
+                        if titre.duree == nil, let d = flux.duree { titre.duree = Int(d.rounded()) }   // vraie durée gardée pour le hors-ligne
+                        guard let url = type == .audio ? flux.audio : flux.videoSeule, type == .audio || flux.audio != nil else {
+                            throw ErreurFlux.introuvable
+                        }
+                        let temporaire = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                        try await TelechargeurMorceaux.telecharger(url, vers: temporaire) { [weak self] fraction in
+                            Task { @MainActor in self?.avancer(cle, type == .clip ? fraction * 0.85 : fraction) }
+                        }
+                        try await terminer(titre, type, temporaire, son: type == .clip ? flux.audio : nil)
+                        break
+                    } catch ErreurReseau.statut(403) where essai == 1 {
+                        await PrechargeurFlux.partage.lienRefuse(titre.idVideo)
+                    }
                 }
-                let temporaire = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-                try await TelechargeurMorceaux.telecharger(url, vers: temporaire) { [weak self] fraction in
-                    Task { @MainActor in self?.avancer(cle, type == .clip ? fraction * 0.85 : fraction) }
-                }
-                try await terminer(titre, type, temporaire, son: type == .clip ? flux.audio : nil)
             } catch {
                 echouer(cle, titre, error)
             }

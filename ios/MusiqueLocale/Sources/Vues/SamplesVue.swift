@@ -46,7 +46,7 @@ struct SamplesVue: View {
     private func jouerVisible(_ id: String?) {
         guard let id, let i = titres.firstIndex(where: { $0.idVideo == id }) else { return }
         // Les 3 clips suivants (et le précédent) se préparent pendant qu'on regarde celui-ci.
-        moteur.precharger(Array(titres[max(0, i - 1)...min(titres.count - 1, i + 3)]))
+        moteur.precharger(Array(titres[i...min(titres.count - 1, i + 1)]))
         guard actif else { return }
         if lecteur.enLecture { lecteur.basculer() }   // comme YouTube Music : un sample met la lecture en pause
         moteur.jouer(titres[i])
@@ -67,7 +67,7 @@ struct SamplesVue: View {
         titres += ajout.shuffled()
         if visible == nil {
             visible = titres.first?.idVideo
-            moteur.precharger(Array(titres.prefix(4)))   // préparés dès l'ouverture de l'app
+            moteur.precharger(Array(titres.prefix(1)))   // le premier préparé dès l'ouverture de l'app
         }
     }
 }

@@ -143,7 +143,7 @@ struct AccueilVue: View {
             page.suite = nil   // sans compte, la suite de l'accueil est vide
             derniereCharge = .now
             if puce == nil { sauvegarder() }
-            PrechargeurFlux.partage.precharger(Array(nouvelle.sections.first { $0.style == .grilleTitres }?.titres.prefix(2) ?? []))
+            PrechargeurFlux.partage.precharger(Array(nouvelle.sections.first { $0.style == .grilleTitres }?.titres.prefix(1) ?? []))
             erreur = nil
         } catch {
             if page.sections.isEmpty { erreur = "Vos téléchargements restent disponibles sans connexion." }
@@ -236,6 +236,6 @@ struct AccueilVue: View {
         radios = resultat
         derniereReco = .now
         sauvegarder()
-        PrechargeurFlux.partage.precharger(Array(resultat.first?.titres.prefix(2) ?? []))
+        PrechargeurFlux.partage.precharger(Array(resultat.first?.titres.prefix(1) ?? []))
     }
 }
