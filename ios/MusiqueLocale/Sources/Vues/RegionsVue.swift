@@ -1,28 +1,6 @@
 import SwiftUI
 
 // Nouveautés et classements par pays : France, États-Unis, Royaume-Uni, International (monde pour les classements).
-enum Pays: String, CaseIterable, Identifiable {
-    case france = "FR", etatsUnis = "US", royaumeUni = "GB", international = "ZZ"
-    var id: String { rawValue }
-    var nom: String {
-        switch self {
-        case .france: "France"
-        case .etatsUnis: "États-Unis"
-        case .royaumeUni: "Royaume-Uni"
-        case .international: "International"
-        }
-    }
-    /// Pays des classements Apple Music utilisés pour les nouveautés (International = États-Unis + Royaume-Uni).
-    var codesApple: [String] {
-        switch self {
-        case .france: ["fr"]
-        case .etatsUnis: ["us"]
-        case .royaumeUni: ["gb"]
-        case .international: ["us", "gb"]
-        }
-    }
-}
-
 /// Puces de choix du pays (le choix est retenu d'une fois sur l'autre).
 struct PucesPays: View {
     @Binding var pays: Pays
@@ -76,7 +54,9 @@ struct RangeeNouveautes: View {
         }
         .task(id: pays) {
             elements = nil
-            elements = await avecEssais(vide: { $0.isEmpty }) { try await InnerTube.partage.nouveautes(pays.codesApple) } ?? []
+            // Aperçu : les albums d'abord, puis les singles, chacun du plus récent au plus ancien.
+            let sorties = await avecEssais(vide: { $0.isEmpty }) { try await InnerTube.partage.nouveautes(pays.codesApple) } ?? []
+            elements = (sorties.filter(\.album) + sorties.filter { !$0.album }).prefix(30).map(\.element)
         }
     }
 }
@@ -84,34 +64,60 @@ struct RangeeNouveautes: View {
 /// Page « Nouveautés » : sorties de l'année par pays, en grille, puis les nouveautés générales de YouTube Music.
 struct NouveautesVue: View {
     @AppStorage("pays") private var pays: Pays = .france
-    @State private var elements: [Element]?
+    @AppStorage("nouveautesSingles") private var singles = false
+    @State private var sorties: [Nouveautes.Sortie]?
     @State private var general: PageYTM?
+
+    /// Une rangée par univers (Rap français, Pop, Électro…), albums ou singles seulement, du plus récent au plus ancien.
+    private var rangees: [Rangee] {
+        let choisies = (sorties ?? []).filter { $0.album != singles }
+        return Nouveautes.Univers.allCases.compactMap { u in
+            let elements = choisies.filter { $0.univers == u }.map(\.element)
+            return elements.isEmpty ? nil : Rangee(titre: u.nom(pays), style: .carrousel, elements: elements)
+        }
+    }
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 24) {
-                PucesPays(pays: $pays)
-                if let elements {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 14, alignment: .top)], spacing: 22) {
-                        ForEach(elements) { e in
-                            ToucheElement(element: e) { CarteVue(element: e, largeur: (UIScreen.main.bounds.width - 46) / 2) }
-                        }
+                VStack(alignment: .leading, spacing: 10) {
+                    PucesPays(pays: $pays)
+                    HStack(spacing: 8) {
+                        puce("Albums et EP", choisie: !singles) { singles = false }
+                        puce("Singles", choisie: singles) { singles = true }
                     }
                     .padding(.horizontal, 16)
+                }
+                if let sorties {
+                    if rangees.isEmpty {
+                        ContentUnavailableView(sorties.isEmpty ? "Nouveautés indisponibles" : "Aucune sortie récente",
+                                               systemImage: "sparkles", description: Text("Réessaie dans un instant."))
+                    }
+                    ForEach(rangees, id: \.titre) { RangeeVue(rangee: $0) }
                 } else {
                     ProgressView().tint(Palette.citron).frame(maxWidth: .infinity, minHeight: 200)
                 }
-                ForEach(general?.sections.filter { $0.style != .carrousel || $0.titre.contains("Clips") } ?? []) { RangeeVue(rangee: $0) }
+                ForEach(general?.sections.filter { $0.titre.contains("Clips") } ?? []) { RangeeVue(rangee: $0) }
             }
             .padding(.vertical, 8)
         }
         .background(Palette.fond)
         .navigationTitle("Nouveautés")
         .task(id: pays) {
-            elements = nil
-            elements = await avecEssais(vide: { $0.isEmpty }) { try await InnerTube.partage.nouveautes(pays.codesApple) } ?? []
+            sorties = nil
+            sorties = await avecEssais(vide: { $0.isEmpty }) { try await InnerTube.partage.nouveautes(pays.codesApple) } ?? []
         }
         .task { general = try? await InnerTube.partage.page("FEmusic_new_releases") }
+    }
+
+    private func puce(_ texte: String, choisie: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(texte).font(.system(size: 14, weight: .semibold))
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .foregroundStyle(choisie ? Palette.fond : Palette.texte)
+                .background(Capsule().fill(choisie ? Color.white : Color.white.opacity(0.1)))
+        }
+        .buttonStyle(.plain)
     }
 }
 

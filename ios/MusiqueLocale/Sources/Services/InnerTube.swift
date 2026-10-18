@@ -220,10 +220,10 @@ struct InnerTube: Sendable {
     }
 
     /// Nouveautés vraiment récentes (voir Nouveautes.swift), gardées 3 heures.
-    func nouveautes(_ codesApple: [String]) async throws -> [Element] {
+    func nouveautes(_ codesApple: [String]) async throws -> [Nouveautes.Sortie] {
         let cle = codesApple.joined(separator: "+")
         if let connu = await CacheNouveautes.partage.lire(cle) { return connu }
-        let sorties = (try? await Nouveautes.sorties(codesApple)) ?? []
+        let sorties = await Nouveautes.sorties(codesApple)
         // Liste trop courte : le serveur d'Apple a répondu à moitié → on garde la précédente si elle est plus complète.
         if sorties.count < 5, let precedente = await CacheNouveautes.partage.secours(cle), precedente.count > sorties.count {
             return precedente
@@ -283,25 +283,26 @@ struct InnerTube: Sendable {
 /// si le serveur d'Apple ne répond pas, on montre la liste précédente plutôt qu'un vide.
 actor CacheNouveautes {
     static let partage = CacheNouveautes()
-    private var memoire: [String: (date: Date, elements: [Element])] = [:]
-    private struct Sauvegarde: Codable { var date: Date; var elements: [Element] }
+    private var memoire: [String: (date: Date, sorties: [Nouveautes.Sortie])] = [:]
+    private struct Sauvegarde: Codable { var date: Date; var sorties: [Nouveautes.Sortie] }
+    private static let prefixe = "nouveautesParUnivers-"
 
-    func lire(_ pays: String) -> [Element]? {
+    func lire(_ pays: String) -> [Nouveautes.Sortie]? {
         guard let m = memoire[pays], Date.now.timeIntervalSince(m.date) < 3 * 3600 else { return nil }
-        return m.elements
+        return m.sorties
     }
-    func ecrire(_ pays: String, _ elements: [Element]) {
-        memoire[pays] = (.now, elements)
-        if let donnees = try? JSONEncoder().encode(Sauvegarde(date: .now, elements: elements)) {
-            UserDefaults.standard.set(donnees, forKey: "nouveautes-" + pays)
+    func ecrire(_ pays: String, _ sorties: [Nouveautes.Sortie]) {
+        memoire[pays] = (.now, sorties)
+        if let donnees = try? JSONEncoder().encode(Sauvegarde(date: .now, sorties: sorties)) {
+            UserDefaults.standard.set(donnees, forKey: Self.prefixe + pays)
         }
     }
     /// Dernière liste valide, si elle a moins de 3 jours.
-    func secours(_ pays: String) -> [Element]? {
-        guard let donnees = UserDefaults.standard.data(forKey: "nouveautes-" + pays),
+    func secours(_ pays: String) -> [Nouveautes.Sortie]? {
+        guard let donnees = UserDefaults.standard.data(forKey: Self.prefixe + pays),
               let s = try? JSONDecoder().decode(Sauvegarde.self, from: donnees),
               Date.now.timeIntervalSince(s.date) < 3 * 86400 else { return nil }
-        return s.elements
+        return s.sorties
     }
 }
 

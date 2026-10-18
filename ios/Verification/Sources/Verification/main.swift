@@ -83,6 +83,17 @@ await verifier("Nouveautés États-Unis et Royaume-Uni", essais: 3) {
     let us = try await it.nouveautes(["us"]), gb = try await it.nouveautes(["gb"])
     return us.count < 5 ? "États-Unis : moins de 5" : gb.count < 3 ? "Royaume-Uni : moins de 3" : nil
 }
+await verifier("Nouveautés par univers (rap, pop, électro…) et albums / singles séparés", essais: 3) {
+    let fr = try await it.nouveautes(["fr"]), us = try await it.nouveautes(["us"])
+    let rapFR = fr.filter { $0.univers == .rap }, rapUS = us.filter { $0.univers == .rap }
+    let univers = Set(us.map(\.univers))
+    print("   France : \(Dictionary(grouping: fr, by: \.univers).mapValues(\.count).sorted { $0.value > $1.value }.map { "\($0.key.rawValue) \($0.value)" }.joined(separator: ", "))")
+    print("   États-Unis : \(Dictionary(grouping: us, by: \.univers).mapValues(\.count).sorted { $0.value > $1.value }.map { "\($0.key.rawValue) \($0.value)" }.joined(separator: ", "))")
+    print("   rap FR albums : \(rapFR.filter(\.album).prefix(4).map { if case .carte(let c) = $0.element { c.sousTitre } else { "" } })")
+    if rapFR.filter(\.album).isEmpty || rapFR.filter({ !$0.album }).isEmpty { return "rap français : albums ou singles manquants" }
+    if rapUS.isEmpty { return "rap US vide" }
+    return univers.contains(.electro) && univers.contains(.pop) ? nil : "électro ou pop manquant aux États-Unis"
+}
 await verifier("Nouveautés retrouvées sur YouTube Music (album et single)") {
     guard let album = try await it.trouverAlbum("Ninho M.I.L.S 4") else { return "album introuvable" }
     guard let titre = try await it.trouverTitre("Ninho Jefe") else { return "titre introuvable" }
