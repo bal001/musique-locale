@@ -51,10 +51,7 @@ struct AccueilVue: View {
                     RangeeVue(rangee: rangee)
                     if puce == nil {
                         if i == 1 {
-                            RangeeNouveautes()
-                            if !aVenir.isEmpty {
-                                RangeeVue(rangee: Rangee(titre: "À venir", surtitre: "Sorties annoncées", style: .carrousel, elements: aVenir))
-                            }
+                            RangeeNouveautes()   // « À venir » retiré à la demande du propriétaire
                         }
                         if i == 3, radios.count > 2, let r = radios.last {
                             RangeeVue(rangee: Rangee(titre: r.graine.artiste, surtitre: "Dans le style de", style: .grilleTitres,

@@ -109,7 +109,7 @@ await verifier("Nouveautés par style précis (trap, drill, rap français, house
         let toutes = try await it.nouveautes([code])
         print("   \(nom) : avec similaires \(toutes.filter { !$0.aVenir }.count) sorties en \(String(format: "%.1f", Date().timeIntervalSince(debut))) s")
         let sorties = toutes.filter { !$0.aVenir }
-        print("   \(nom) à venir : " + toutes.filter(\.aVenir).prefix(5).map { if case .carte(let c) = $0.element { c.sousTitre } else { "" } }.joined(separator: " | "))
+        
         let connus = sorties.filter { fiches[GenresArtistes.cle($0.artiste)]?.styles.isEmpty == false }.count
         let styles = Dictionary(uniqueKeysWithValues: StyleMusical.ranger(sorties.filter(\.album)) {
             StyleMusical.pour(fiches[GenresArtistes.cle($0.artiste)], univers: $0.univers, paysPage: code.uppercased())

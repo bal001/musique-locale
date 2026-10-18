@@ -4,7 +4,7 @@ import Foundation
 // Sources publiques d'Apple, mises à jour chaque jour, avec la date de sortie et le style :
 //  - les 100 albums et titres les plus écoutés du pays sur Apple Music : uniquement des artistes réellement écoutés
 //    (les classements iTunes par style, faits de ventes de téléchargements, remontaient des inconnus : retirés).
-// Filtrées sur les 2 derniers mois, de la plus récente à la plus ancienne. Toucher une sortie l'ouvre
+// Filtrées sur les 4 derniers mois, de la plus récente à la plus ancienne. Toucher une sortie l'ouvre
 // (album) ou la lance (single) sur YouTube Music.
 enum Nouveautes {
     /// Univers musicaux, dans l'ordre d'affichage.
@@ -81,11 +81,11 @@ enum Nouveautes {
 
     /// `codes` : pays Apple (fr, us, gb). Plusieurs pays → sorties fusionnées (« International »).
     /// Méthode « Release Radar » : les artistes les plus écoutés du pays (classements Apple Music), puis TOUTES leurs
-    /// sorties des 2 derniers mois et à venir (annuaire iTunes, dates exactes, précommandes). Que des artistes connus.
+    /// sorties des 4 derniers mois et à venir (annuaire iTunes, dates exactes, précommandes). Que des artistes connus.
     static func sorties(_ codes: [String], elargi: Bool = true) async -> [Sortie] {
         let aujourdhui = Date.now
-        let limite = Calendar.current.date(byAdding: .day, value: -61, to: aujourdhui) ?? aujourdhui
-        let horizon = Calendar.current.date(byAdding: .month, value: 4, to: aujourdhui) ?? aujourdhui
+        let limite = Calendar.current.date(byAdding: .day, value: -122, to: aujourdhui) ?? aujourdhui
+        let horizon = aujourdhui   // déjà sorties seulement (« À venir » retiré à la demande du propriétaire)
         let format = DateFormatter()
         format.locale = Locale(identifier: "en_US_POSIX")
         format.dateFormat = "yyyy-MM-dd"

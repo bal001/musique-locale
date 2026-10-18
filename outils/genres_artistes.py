@@ -22,7 +22,7 @@ def cle(nom):
 def principal(artistes):
     return re.split(r"\s*(?:,|&| feat\.? | ft\.? | x | X | et )\s*", artistes)[0].strip()
 
-LIMITE = time.strftime("%Y-%m-%d", time.gmtime(time.time() - 61 * 86400))
+LIMITE = time.strftime("%Y-%m-%d", time.gmtime(time.time() - 122 * 86400))
 
 def artistes_des_flux():
     """Artistes des nouveautés (méthode « Release Radar » de l'app) : artistes les plus écoutés d'Apple Music
