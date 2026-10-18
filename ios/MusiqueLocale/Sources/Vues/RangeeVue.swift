@@ -44,6 +44,17 @@ struct RangeeVue: View {
                         .overlay(Capsule().stroke(Palette.bord, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
+            } else if rangee.toutAfficher, rangee.elements.count > 2 {
+                Button { navigateur.ouvrir(.grille(rangee.titre, rangee.elements)) } label: {
+                    HStack(spacing: 4) {
+                        Text("Tout afficher")
+                        Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold))
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .overlay(Capsule().stroke(Palette.bord, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
             } else if let lien = rangee.lien {
                 Button { navigateur.ouvrir(Route.pour(lien)) } label: {
                     Text("Plus").font(.system(size: 13, weight: .semibold))
@@ -228,3 +239,23 @@ struct ImageDistante: View {
             }
     }
 }
+
+/// « Tout afficher » : toute une rangée en grille de 2 colonnes, dans l'ordre de la rangée (Nouveautés : la plus récente d'abord).
+struct GrilleVue: View {
+    let titre: String
+    let elements: [Element]
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 14, alignment: .top)], spacing: 22) {
+                ForEach(elements) { e in
+                    ToucheElement(element: e, liste: [], source: titre) { CarteVue(element: e, largeur: (UIScreen.main.bounds.width - 46) / 2) }
+                }
+            }
+            .padding(16)
+        }
+        .background(Palette.fond)
+        .navigationTitle(titre)
+    }
+}
+

@@ -12,6 +12,7 @@ enum Route: Hashable {
     case playlistPerso(UUID)
     case titresJaime
     case parametres
+    case grille(String, [Element])   // « Tout afficher » d'une rangée
 
     /// Les pages Nouveautés et Classements de YouTube Music s'ouvrent avec le choix du pays.
     static func pour(_ carte: Carte) -> Route {
@@ -36,6 +37,7 @@ extension View {
             case .playlistPerso(let id): PlaylistPersoVue(id: id)
             case .titresJaime: TitresJaimeVue()
             case .parametres: ParametresVue()
+            case .grille(let titre, let elements): GrilleVue(titre: titre, elements: elements)
             }
         }
     }

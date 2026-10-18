@@ -49,6 +49,7 @@ struct Rangee: Identifiable, Sendable {
     var lien: Carte? = nil        // « Tout afficher » / titre cliquable
     var large = false             // vignettes 16:9 (clips)
     var vignette: URL? = nil      // photo ronde à côté du titre (« En rapport avec … »)
+    var toutAfficher = false      // bouton « Tout afficher › » : la rangée entière en grille (Nouveautés par style)
 
     var titres: [Titre] { elements.compactMap { if case .titre(let t) = $0 { t } else { nil } } }
 }

@@ -76,7 +76,7 @@ struct NouveautesVue: View {
         let choisies = (sorties ?? []).filter { $0.album != singles && !$0.aVenir && pays.accepte($0, fiche: fiches[GenresArtistes.cle($0.artiste)]) }
         let indice: String? = switch pays { case .france: "FR"; case .etatsUnis: "US"; case .royaumeUni: "GB"; case .international: nil }
         return StyleMusical.ranger(choisies) { StyleMusical.pour(fiches[GenresArtistes.cle($0.artiste)], univers: $0.univers, paysPage: indice) }
-            .map { Rangee(titre: $0.style.nom, style: .carrousel, elements: $0.sorties.map(\.element)) }
+            .map { Rangee(titre: $0.style.nom, style: .carrousel, elements: $0.sorties.sorted { $0.date > $1.date }.map(\.element), toutAfficher: true) }
     }
 
     var body: some View {
