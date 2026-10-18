@@ -38,6 +38,29 @@ await verifier("Suggestions") { try await it.suggestions("nin").isEmpty ? "aucun
 await verifier("Page d'artiste") { try await it.page("UCBNTNHPngOpC-yeC8VpAPJQ").entete?.type == .artiste ? nil : "en-tête manquant" }
 await verifier("Page d'album") { try await it.page("MPREb_TLwxTUtg1L9").titresPrincipaux.count >= 5 ? nil : "pistes manquantes" }
 await verifier("Radio (recommandations)") { try await it.radio("1tClJjSEEpE").count >= 20 ? nil : "moins de 20 titres" }
+await verifier("Accueil : suite (comme le site, grâce au visiteur)") {
+    let p = try await it.page("FEmusic_home")
+    guard let j = p.suite else { return "pas de jeton de suite" }
+    let suite = try await it.suitePage(j)
+    print("   suite de l'accueil : " + suite.sections.map(\.titre).joined(separator: " | "))
+    return suite.sections.isEmpty ? "suite vide" : nil
+}
+await verifier("Radio infinie (même radio, suite sans doublon)") {
+    let r = try await it.radioAvecSuite("1tClJjSEEpE")
+    guard let j = r.suite else { return "pas de suite" }
+    let s = try await it.radioSuite(j)
+    let nouveaux = Set(s.titres.map(\.idVideo)).subtracting(r.titres.map(\.idVideo)).count
+    print("   radio : \(r.titres.count) titres puis \(nouveaux) nouveaux")
+    return nouveaux >= 30 ? nil : "suite trop courte (\(nouveaux))"
+}
+await verifier("Radio de fin d'album (RDAMPL)") {
+    guard let album = try await it.trouverAlbum("Ninho M.I.L.S 4") else { return "album introuvable" }
+    let page = try await it.page(album.idPage)
+    guard let liste = page.idListe else { return "pas d'identifiant de liste" }
+    let r = try await it.radioAvecSuite(page.titresPrincipaux.first?.idVideo ?? "", liste: liste)
+    print("   album \(liste) : radio de \(r.titres.count) titres")
+    return r.titres.count >= 20 ? nil : "radio trop courte"
+}
 await verifier("Similaires") { try await it.similaires("1tClJjSEEpE").isEmpty ? "vide" : nil }
 await verifier("Classements France") { try await it.classements("FR").sections.isEmpty ? "vides" : nil }
 await verifier("Nouveautés France", essais: 3) { try await it.nouveautes(["fr"]).count >= 5 ? nil : "moins de 5 sorties" }

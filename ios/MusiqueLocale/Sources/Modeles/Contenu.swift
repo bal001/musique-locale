@@ -76,6 +76,7 @@ struct PageYTM: Sendable {
     var puces: [Puce] = []
     var sections: [Rangee] = []
     var suite: String? = nil      // jeton pour charger la suite (accueil infini)
+    var idListe: String? = nil    // playlist YouTube de l'album / de la playlist (radio de la liste à la fin)
 
     /// Titres d'un album ou d'une playlist (première section en liste).
     var titresPrincipaux: [Titre] { sections.first { $0.style == .liste }?.titres ?? [] }

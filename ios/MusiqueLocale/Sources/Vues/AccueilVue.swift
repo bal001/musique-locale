@@ -137,8 +137,16 @@ struct AccueilVue: View {
             let puces = page.puces.isEmpty || puce == nil ? nouvelle.puces : page.puces
             page = nouvelle
             page.puces = puces
-            page.suite = nil   // sans compte, la suite de l'accueil est vide
             derniereCharge = .now
+            // Suite de l'accueil (comme le site : Playlists de la communauté, Titres tendance, Nouveautés, 100% hits…).
+            var jeton = nouvelle.suite
+            for _ in 0..<3 {
+                guard let j = jeton, let suite = try? await InnerTube.partage.suitePage(j), !suite.sections.isEmpty else { break }
+                let connus = Set(page.sections.map(\.titre))
+                page.sections += suite.sections.filter { !connus.contains($0.titre) }
+                jeton = suite.suite
+            }
+            page.suite = nil
             if puce == nil { sauvegarder() }
             PrechargeurFlux.partage.precharger(Array(nouvelle.sections.first { $0.style == .grilleTitres }?.titres.prefix(1) ?? []))
             erreur = nil

@@ -79,21 +79,35 @@ struct InnerTube: Sendable {
         requete.setValue("https://music.youtube.com", forHTTPHeaderField: "Origin")
         requete.setValue("https://music.youtube.com/", forHTTPHeaderField: "Referer")
         requete.setValue(Self.agent, forHTTPHeaderField: "User-Agent")
+        // Identifiant de visiteur dans chaque requête, comme le site (sans lui, la suite de l'accueil revient vide).
+        let visiteur = UserDefaults.standard.string(forKey: "visiteurYT")
+        var client = Self.client
+        if let visiteur {
+            client["visitorData"] = visiteur
+            requete.setValue(visiteur, forHTTPHeaderField: "X-Goog-Visitor-Id")
+        }
         var complet = corps
-        complet["context"] = ["client": Self.client]
+        complet["context"] = ["client": client]
         requete.httpBody = try JSONSerialization.data(withJSONObject: complet)
         var (donnees, reponse) = try await URLSession.shared.data(for: requete)
         if let http = reponse as? HTTPURLResponse, [400, 403].contains(http.statusCode) {
             // Refus : YouTube a peut-être changé de version → on la relit et on réessaie une fois.
             await Self.actualiserVersion(forcer: true)
-            complet["context"] = ["client": Self.client]
+            client.merge(Self.client) { _, nouveau in nouveau }
+            complet["context"] = ["client": client]
             requete.httpBody = try JSONSerialization.data(withJSONObject: complet)
             (donnees, reponse) = try await URLSession.shared.data(for: requete)
         }
         if let http = reponse as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw ErreurReseau.statut(http.statusCode)
         }
-        return try JSONSerialization.jsonObject(with: donnees)
+        let json = try JSONSerialization.jsonObject(with: donnees)
+        // Premier visiteur donné par YouTube : gardé pour les requêtes suivantes.
+        if visiteur == nil, let v = ArbreJSON.valeur(json, "responseContext", "visitorData") as? String {
+            UserDefaults.standard.set(v, forKey: "visiteurYT")
+            UserDefaults.standard.set(Date.now, forKey: "visiteurYTDate")
+        }
+        return json
     }
 
     // MARK: Recherche
@@ -198,7 +212,14 @@ struct InnerTube: Sendable {
     func page(_ idPage: String, params: String? = nil) async throws -> PageYTM {
         var corps: [String: Any] = ["browseId": idPage]
         if let params { corps["params"] = params }
-        return AnalyseYTM.page(try await appel("browse", corps), idPage: idPage)
+        let json = try await appel("browse", corps)
+        var page = AnalyseYTM.page(json, idPage: idPage)
+        // Liste YouTube derrière un album (OLAK5uy_…) ou une playlist (VLPL… → PL…), pour la radio de fin de liste.
+        if idPage.hasPrefix("VL") { page.idListe = String(idPage.dropFirst(2)) }
+        else if idPage.hasPrefix("MPREb") {
+            page.idListe = ArbreJSON.premiereChaine(dans: json, ou: { $0 == "playlistId" && $1.hasPrefix("OLAK5uy") })
+        }
+        return page
     }
 
     func suitePage(_ jeton: String) async throws -> PageYTM {
@@ -252,13 +273,35 @@ struct InnerTube: Sendable {
     // MARK: Recommandations (« radio » de YouTube Music)
 
     /// Titres dans le même esprit que `idVideo` : la file « À suivre » que YouTube Music lance après un titre.
-    func radio(_ idVideo: String) async throws -> [Titre] {
-        let json = try await appel("next", ["videoId": idVideo, "playlistId": "RDAMVM" + idVideo, "isAudioOnly": true,
-                                            "enablePersistentPlaylistPanel": true])
+    func radio(_ idVideo: String) async throws -> [Titre] { try await radioAvecSuite(idVideo).titres }
+
+    /// Radio comme le site : celle d'un titre (`RDAMVM…`) ou, après un album / une playlist, celle de la liste
+    /// (`RDAMPL<idListe>`). Infinie : `suite` donne 50 titres de plus, sans doublon (voir `radioSuite`).
+    func radioAvecSuite(_ idVideo: String, liste: String? = nil) async throws -> (titres: [Titre], suite: String?) {
+        var corps: [String: Any] = ["isAudioOnly": true, "enablePersistentPlaylistPanel": true, "tunerSettingValue": "AUTOMIX_SETTING_NORMAL"]
+        if let liste {
+            corps["playlistId"] = "RDAMPL" + liste
+            corps["params"] = "wAEB8gECeAE="
+        } else {
+            corps["videoId"] = idVideo
+            corps["playlistId"] = "RDAMVM" + idVideo
+            corps["params"] = "wAEB"
+        }
+        return Self.lireRadio(try await appel("next", corps))
+    }
+
+    func radioSuite(_ jeton: String) async throws -> (titres: [Titre], suite: String?) {
+        Self.lireRadio(try await appel("next", ["continuation": jeton, "isAudioOnly": true, "enablePersistentPlaylistPanel": true,
+                                                "tunerSettingValue": "AUTOMIX_SETTING_NORMAL"]))
+    }
+
+    private static func lireRadio(_ json: Any) -> (titres: [Titre], suite: String?) {
         var vus = Set<String>()
-        return ArbreJSON.tous("playlistPanelVideoRenderer", dans: json)
-            .compactMap(AnalyseYTM.titreFile)
+        let titres = ArbreJSON.tous("playlistPanelVideoRenderer", dans: json).compactMap(AnalyseYTM.titreFile)
             .filter { vus.insert($0.idVideo).inserted }
+        let suite = (ArbreJSON.tous("nextRadioContinuationData", dans: json) + ArbreJSON.tous("nextContinuationData", dans: json))
+            .compactMap { $0["continuation"] as? String }.first
+        return (titres, suite)
     }
 
     /// Onglet « Similaires » : titres, artistes et playlists proches.

@@ -94,7 +94,7 @@ struct PageVue: View {
     private func boutonsLecture(radio: Bool) -> some View {
         HStack(spacing: 12) {
             Button {
-                lecteur.jouer(titres.shuffled())
+                lecteur.jouer(titres.shuffled(), liste: page?.idListe)
             } label: {
                 Label("Aléatoire", systemImage: "shuffle")
                     .font(.system(size: 15, weight: .semibold))
@@ -103,7 +103,7 @@ struct PageVue: View {
                     .background(Capsule().fill(Color.white))
             }
             Button {
-                if radio, let premier = titres.first { lecteur.lancerRadio(premier) } else { lecteur.jouer(titres) }
+                if radio, let premier = titres.first { lecteur.lancerRadio(premier) } else { lecteur.jouer(titres, liste: page?.idListe) }
             } label: {
                 Label(radio ? "Radio" : "Lecture", systemImage: radio ? "dot.radiowaves.left.and.right" : "play.fill")
                     .font(.system(size: 15, weight: .semibold))

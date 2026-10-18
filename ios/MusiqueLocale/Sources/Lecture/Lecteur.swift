@@ -56,6 +56,11 @@ final class Lecteur {
     @ObservationIgnored private var pochette: MPMediaItemArtwork?
     @ObservationIgnored private var tacheRadio: Task<Void, Never>?
     @ObservationIgnored private var graineRadio: String?
+    /// Suite de la radio en cours (comme le site : la même radio continue, infinie, au lieu d'en relancer une).
+    @ObservationIgnored private var jetonRadio: String?
+    /// Album ou playlist lancé (`OLAK5uy_…`, `PL…`) : à sa fin, la radio de la liste (`RDAMPL…`) prend le relais.
+    @ObservationIgnored private var idListe: String?
+    @ObservationIgnored private var zapsDepuisGraine = 0
     @ObservationIgnored private var derniereBonneEcoute: Titre?   // dernier titre écouté jusqu'au bout ou aimé
     @ObservationIgnored private var tacheVeille: Task<Void, Never>?
     @ObservationIgnored private var repriseApresInterruption = false
@@ -80,12 +85,17 @@ final class Lecteur {
 
     /// Lance une liste. Comme YouTube Music, un titre seul est suivi de recommandations dans le même esprit,
     /// et une liste se prolonge par des recommandations quand elle arrive à sa fin.
-    func jouer(_ titres: [Titre], depuis i: Int = 0, source: String? = nil) {
+    func jouer(_ titres: [Titre], depuis i: Int = 0, source: String? = nil, liste: String? = nil) {
         guard titres.indices.contains(i) else { return }
         file = titres
         index = i
         ajoutsAuto = 0
         graineRadio = nil
+        jetonRadio = nil
+        tacheRadio?.cancel()
+        tacheRadio = nil
+        idListe = liste
+        zapsDepuisGraine = 0
         derniereBonneEcoute = titres[i]
         self.source = source
         charger()
@@ -97,16 +107,27 @@ final class Lecteur {
         jouer([titre], source: "Mix de \(titre.nom)")
     }
 
-    /// Prolonge la file avec des titres similaires quand il en reste moins de 3.
-    /// Recommandations de YouTube Music (même algorithme que l'app officielle), affinées par vos goûts :
-    /// jamais un titre 👎 ou zappé, ni un titre écouté récemment, ni une autre version d'un même morceau ;
-    /// et la graine est le dernier titre vraiment écouté ou aimé, pour ne pas dériver après un zap.
+    /// Prolonge la file comme YouTube Music (REA du site) quand il reste 5 titres ou moins :
+    /// - la MÊME radio continue avec sa suite (infinie, sans doublon) au lieu d'en relancer une nouvelle ;
+    /// - après un album ou une playlist, c'est la radio de la liste (`RDAMPL…`) qui prend le relais ;
+    /// - une nouvelle graine (dernier titre vraiment écouté ou aimé) seulement après 3 zaps : la radio ne colle plus ;
+    /// - jamais avec « Répéter tout » (la liste revient au début, comme sur le site).
+    /// Filtré par vos goûts : jamais un titre 👎 ou zappé, ni écouté récemment, ni une autre version d'un même morceau.
     private func prolongerSiBesoin() {
-        guard lectureAuto, file.count - index <= 3, let graine = derniereBonneEcoute ?? enCours, graine.idVideo != graineRadio else { return }
-        graineRadio = graine.idVideo
-        tacheRadio?.cancel()
+        guard lectureAuto, repetition != .tout, index + 5 >= file.count, tacheRadio == nil || tacheRadio?.isCancelled == true,
+              let graine = derniereBonneEcoute ?? enCours else { return }
+        let jeton = jetonRadio
+        let liste = jeton == nil && graineRadio == nil ? idListe : nil
+        guard jeton != nil || graine.idVideo != graineRadio else { return }
+        if jeton == nil { graineRadio = graine.idVideo }
         tacheRadio = Task {
-            guard let proposes = try? await InnerTube.partage.radio(graine.idVideo), !Task.isCancelled else { return }
+            defer { if !Task.isCancelled { tacheRadio = nil } }
+            let resultat: (titres: [Titre], suite: String?)?
+            if let jeton { resultat = try? await InnerTube.partage.radioSuite(jeton) }
+            else { resultat = try? await InnerTube.partage.radioAvecSuite(graine.idVideo, liste: liste) }
+            guard let resultat, !Task.isCancelled else { return }
+            jetonRadio = resultat.suite
+            let proposes = resultat.titres
             let recents = Set(historique.ecoutes.prefix(25).map(\.idVideo))
             var deja = Set(file.map(\.idVideo))
             var morceaux = Set(file.map { Self.morceau($0) })
@@ -147,6 +168,9 @@ final class Lecteur {
         index = 0
         ajoutsAuto = 0
         graineRadio = nil
+        jetonRadio = nil
+        tacheRadio?.cancel()
+        tacheRadio = nil
         prolongerSiBesoin()
     }
 
@@ -209,10 +233,14 @@ final class Lecteur {
         if automatique, repetition == .un { chercher(a: 0); reprendre(); return }
         if let t = enCours {
             if automatique {
+                zapsDepuisGraine = 0
                 derniereBonneEcoute = t
                 historique.noterEcouteReelle(t, complete: true)
             } else if position < 30 {
                 historique.noterZap(t)
+                // 3 zaps de suite : la radio ne plaît pas → la prochaine repart du dernier titre vraiment écouté.
+                zapsDepuisGraine += 1
+                if zapsDepuisGraine >= 3 { jetonRadio = nil; zapsDepuisGraine = 0 }
             } else if position >= 60 {
                 historique.noterEcouteReelle(t, complete: false)
             }
@@ -228,7 +256,7 @@ final class Lecteur {
     }
 
     func precedent() {
-        if position > 3 || index == 0 { chercher(a: 0); return }
+        if position > 5 || index == 0 { chercher(a: 0); return }   // 5 s, comme YouTube Music
         index -= 1
         charger()
     }
