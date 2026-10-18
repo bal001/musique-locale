@@ -24,9 +24,10 @@ await InnerTube.actualiserVersion(forcer: true)
 await verifier("Version du client YouTube Music") {
     UserDefaults.standard.string(forKey: "versionClientYTM") == nil ? "illisible sur music.youtube.com" : nil
 }
-await verifier("Accueil") {
-    let p = try await it.page("FEmusic_home")
-    return p.sections.isEmpty ? "aucune rangée" : p.sections.contains { $0.style == .grilleTitres } ? nil : "pas de « Sélection rapide »"
+await verifier("Accueil") { try await it.page("FEmusic_home").sections.isEmpty ? "aucune rangée" : nil }
+// L'accueil vu depuis les serveurs de GitHub (États-Unis, sans historique) n'a pas toujours de « Sélection rapide ».
+await verifier("Accueil : Sélection rapide", avertissementDansLeCloud: true) {
+    try await it.page("FEmusic_home").sections.contains { $0.style == .grilleTitres } ? nil : "pas de « Sélection rapide »"
 }
 await verifier("Explorer") { try await it.page("FEmusic_explore").sections.count >= 3 ? nil : "moins de 3 rangées" }
 await verifier("Recherche") {
