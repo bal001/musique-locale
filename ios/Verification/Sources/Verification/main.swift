@@ -156,6 +156,15 @@ await verifier("Nouveautés par style précis (trap, drill, rap français, house
     if noms["fr"]?.contains("Rap français") != true && noms["fr"]?.contains("Trap française") != true { return "pas de rap français" }
     return noms["us"]?.contains("Trap américaine") == true || noms["us"]?.contains("Rap américain") == true ? nil : "pas de rap américain"
 }
+await verifier("Nouveautés : « Cette semaine » et « Pour toi »") {
+    let fr = try await it.nouveautes(["fr"])
+    let semaine = Calendar.current.date(byAdding: .day, value: -7, to: .now)!
+    let recentes = fr.filter { $0.date >= semaine && !$0.aVenir }
+    print("   Cette semaine (France) : " + recentes.prefix(6).map { if case .carte(let c) = $0.element { c.sousTitre } else { "" } }.joined(separator: " | "))
+    let perso = await Nouveautes.pourToi(["Ninho", "Booba", "Tiakola"])
+    print("   Pour toi (Ninho, Booba, Tiakola) : " + perso.prefix(6).map { if case .carte(let c) = $0.element { c.nom + " — " + c.sousTitre } else { "" } }.joined(separator: " | "))
+    return recentes.count >= 3 && perso.count >= 3 ? nil : "rangées trop courtes"
+}
 await verifier("Nouveautés retrouvées sur YouTube Music (album et single)") {
     guard let album = try await it.trouverAlbum("Ninho M.I.L.S 4") else { return "album introuvable" }
     guard let titre = try await it.trouverTitre("Ninho Jefe") else { return "titre introuvable" }

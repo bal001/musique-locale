@@ -155,7 +155,10 @@ enum Nouveautes {
                 URL(string: $0.replacingOccurrences(of: #"\d+x\d+bb"#, with: "600x600bb", options: .regularExpression))
             }
             let aVenir = date > aujourdhui
-            let quand = aVenir ? "Sort le \(date.formatted(affichage))" : date.formatted(affichage)
+            let jours = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: date),
+                                                         to: Calendar.current.startOfDay(for: aujourdhui)).day ?? 99
+            let quand = aVenir ? "Sort le \(date.formatted(affichage))"
+                : jours <= 0 ? "Aujourd'hui" : jours == 1 ? "Hier" : jours < 7 ? "Il y a \(jours) j" : date.formatted(affichage)
             let carte = Carte(idPage: "chercher:\(estSingle ? "titre" : "album"):\(l.artiste) \(nomPropre)",
                               type: .album, nom: nomPropre, sousTitre: "\(nature) • \(l.artiste) • \(quand)", image: image)
             trouvees.append(Sortie(element: .carte(carte), date: date, album: !estSingle, univers: l.univers ?? Univers.depuis(l.genres),
@@ -173,6 +176,52 @@ enum Nouveautes {
         if mots.contains(where: { a.contains($0) || n.contains($0) }) { return true }
         return genres.contains { g in ["children", "enfant", "jeunesse", "audiobook", "livres audio", "spoken", "fitness", "holiday", "fêtes"]
             .contains { g.lowercased().contains($0) } }
+    }
+
+    /// « Pour toi » : sorties des 4 derniers mois de tes artistes préférés (profil de goûts du téléphone) et de
+    /// 3 artistes proches de chacun (Deezer), de la plus récente à la plus ancienne, une carte par artiste au plus 2.
+    static func pourToi(_ artistes: [String]) async -> [Sortie] {
+        let service = ArtistesSimilaires.partage
+        let limite = Calendar.current.date(byAdding: .day, value: -122, to: .now) ?? .now
+        let format = DateFormatter()
+        format.locale = Locale(identifier: "en_US_POSIX")
+        format.dateFormat = "yyyy-MM-dd"
+        let tetes = await withTaskGroup(of: ArtistesSimilaires.Artiste?.self) { g in
+            for n in artistes.prefix(20) { g.addTask { await service.artiste(n) } }
+            var r: [ArtistesSimilaires.Artiste] = []
+            for await a in g { if let a { r.append(a) } }
+            return r
+        }
+        var cercle = tetes
+        var vus = Set(tetes.map(\.id))
+        for voisins in await withTaskGroup(of: [ArtistesSimilaires.Artiste].self, body: { g in
+            for a in tetes { g.addTask { Array(await service.similaires(a).prefix(3)) } }
+            var r: [[ArtistesSimilaires.Artiste]] = []
+            for await s in g { r.append(s) }
+            return r
+        }) { for v in voisins where vus.insert(v.id).inserted { cercle.append(v) } }
+        let disques = await withTaskGroup(of: [ArtistesSimilaires.Disque].self) { g in
+            for a in cercle { g.addTask { await service.disques(a) } }
+            var r: [ArtistesSimilaires.Disque] = []
+            for await d in g { r += d }
+            return r
+        }
+        await service.sauver()
+        let affichage = Date.FormatStyle().day().month(.abbreviated).locale(Locale(identifier: "fr_FR"))
+        var cles = Set<String>()
+        return disques.compactMap { d -> Sortie? in
+            guard let date = format.date(from: d.date), date >= limite, date <= .now,
+                  !parasite(d.artiste, d.titre, [95, 457, 173].contains(d.genre ?? 0) ? ["jeunesse"] : []),
+                  cles.insert(GenresArtistes.cle(d.artiste) + "|" + d.titre.lowercased()).inserted else { return nil }
+            let jours = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: date),
+                                                         to: Calendar.current.startOfDay(for: .now)).day ?? 99
+            let quand = jours <= 0 ? "Aujourd'hui" : jours == 1 ? "Hier" : jours < 7 ? "Il y a \(jours) j" : date.formatted(affichage)
+            let single = d.type == "single"
+            let nature = single ? "Single" : d.type == "ep" ? "EP" : "Album"
+            let carte = Carte(idPage: "chercher:\(single ? "titre" : "album"):\(d.artiste) \(d.titre)", type: .album, nom: d.titre,
+                              sousTitre: "\(nature) • \(d.artiste) • \(quand)", image: d.image.flatMap(URL.init(string:)))
+            return Sortie(element: .carte(carte), date: date, album: !single, univers: ArtistesSimilaires.univers(d.genre), artiste: d.artiste)
+        }.sorted { $0.date > $1.date }
     }
 
     /// Artistes du moment → leurs similaires sur Deezer (12 chacun, 300 au plus) → sorties des uns et des autres.

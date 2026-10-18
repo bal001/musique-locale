@@ -69,14 +69,37 @@ struct NouveautesVue: View {
     @AppStorage("nouveautesSingles") private var singles = false
     @State private var sorties: [Nouveautes.Sortie]?
     @State private var fiches: [String: GenresArtistes.Fiche] = [:]
+    @State private var pourToi: [Nouveautes.Sortie] = []
+    @Environment(Historique.self) private var historique
 
-    /// Une rangée par style précis (Trap américaine, Drill UK, Rap français, House…), albums ou singles seulement,
-    /// de la plus récente à celle d'il y a 4 mois ; les styles les plus fournis d'abord, par famille.
+    /// Sorties du pays choisi (origine des artistes), albums ou singles selon la puce.
+    private var choisies: [Nouveautes.Sortie] {
+        (sorties ?? []).filter { $0.album != singles && !$0.aVenir && pays.accepte($0, fiche: fiches[GenresArtistes.cle($0.artiste)]) }
+    }
+
+    /// Une seule carte par artiste dans une rangée (sa sortie la plus récente), de la plus récente à la plus ancienne.
+    private static func uneParArtiste(_ liste: [Nouveautes.Sortie]) -> [Element] {
+        var vus = Set<String>()
+        return liste.sorted { $0.date > $1.date }.filter { vus.insert(GenresArtistes.cle($0.artiste)).inserted }.map(\.element)
+    }
+
+    /// Verdict du conseil : « Cette semaine » (7 derniers jours, tous styles), « Pour toi » (tes artistes et leurs proches),
+    /// puis une rangée par style précis (Rap français, Trap américaine…), sans fourre-tout « Autres styles ».
     private var rangees: [Rangee] {
-        let choisies = (sorties ?? []).filter { $0.album != singles && !$0.aVenir && pays.accepte($0, fiche: fiches[GenresArtistes.cle($0.artiste)]) }
+        let liste = choisies
+        var r: [Rangee] = []
+        let semaine = Calendar.current.date(byAdding: .day, value: -7, to: .now) ?? .now
+        let recentes = Self.uneParArtiste(liste.filter { $0.date >= semaine })
+        if recentes.count >= 3 { r.append(Rangee(titre: "Cette semaine", style: .carrousel, elements: recentes, toutAfficher: true)) }
+        let perso = Self.uneParArtiste(pourToi.filter { $0.album != singles })
+        if perso.count >= 3 {
+            r.append(Rangee(titre: "Pour toi", surtitre: "Tes artistes et leurs proches", style: .carrousel, elements: perso, toutAfficher: true))
+        }
         let indice: String? = switch pays { case .france: "FR"; case .etatsUnis: "US"; case .royaumeUni: "GB"; case .international: nil }
-        return StyleMusical.ranger(choisies) { StyleMusical.pour(fiches[GenresArtistes.cle($0.artiste)], univers: $0.univers, paysPage: indice) }
-            .map { Rangee(titre: $0.style.nom, style: .carrousel, elements: $0.sorties.sorted { $0.date > $1.date }.map(\.element), toutAfficher: true) }
+        r += StyleMusical.ranger(liste) { StyleMusical.pour(fiches[GenresArtistes.cle($0.artiste)], univers: $0.univers, paysPage: indice) }
+            .filter { $0.style.cle != "autres" }
+            .map { Rangee(titre: $0.style.nom, style: .carrousel, elements: Self.uneParArtiste($0.sorties), toutAfficher: true) }
+        return r
     }
 
     var body: some View {
@@ -115,6 +138,11 @@ struct NouveautesVue: View {
             if liste.count >= rapide.count { sorties = liste }
             // Artistes inconnus de la table : classés au fur et à mesure (1 par seconde), la page se range toute seule.
             if await GenresArtistes.partage.completer(liste.map(\.artiste)) { fiches = await GenresArtistes.partage.toutes() }
+        }
+        .task {
+            // « Pour toi » seulement quand l'app connaît assez tes goûts (sinon la rangée n'apparaît pas).
+            guard historique.profilSuffisant else { return }
+            pourToi = await Nouveautes.pourToi(historique.artistesPreferes(20).map { GenresArtistes.premierArtiste($0.artiste) })
         }
     }
 
