@@ -102,7 +102,12 @@ await verifier("Nouveautés par style précis (trap, drill, rap français, house
           let fiches = try? JSONDecoder().decode([String: GenresArtistes.Fiche].self, from: donnees) else { return "table des styles absente" }
     var noms: [String: Set<String>] = [:]
     for (code, nom) in [("fr", "France"), ("us", "États-Unis")] {
+        var debut = Date()
+        let rapides = try await it.nouveautes([code], elargi: false)
+        print("   \(nom) : affichage rapide \(rapides.filter { !$0.aVenir }.count) sorties en \(String(format: "%.1f", Date().timeIntervalSince(debut))) s")
+        debut = Date()
         let toutes = try await it.nouveautes([code])
+        print("   \(nom) : avec similaires \(toutes.filter { !$0.aVenir }.count) sorties en \(String(format: "%.1f", Date().timeIntervalSince(debut))) s")
         let sorties = toutes.filter { !$0.aVenir }
         print("   \(nom) à venir : " + toutes.filter(\.aVenir).prefix(5).map { if case .carte(let c) = $0.element { c.sousTitre } else { "" } }.joined(separator: " | "))
         let connus = sorties.filter { fiches[GenresArtistes.cle($0.artiste)]?.styles.isEmpty == false }.count

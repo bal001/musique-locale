@@ -82,7 +82,7 @@ enum Nouveautes {
     /// `codes` : pays Apple (fr, us, gb). Plusieurs pays → sorties fusionnées (« International »).
     /// Méthode « Release Radar » : les artistes les plus écoutés du pays (classements Apple Music), puis TOUTES leurs
     /// sorties des 2 derniers mois et à venir (annuaire iTunes, dates exactes, précommandes). Que des artistes connus.
-    static func sorties(_ codes: [String]) async -> [Sortie] {
+    static func sorties(_ codes: [String], elargi: Bool = true) async -> [Sortie] {
         let aujourdhui = Date.now
         let limite = Calendar.current.date(byAdding: .day, value: -61, to: aujourdhui) ?? aujourdhui
         let horizon = Calendar.current.date(byAdding: .month, value: 4, to: aujourdhui) ?? aujourdhui
@@ -134,7 +134,7 @@ enum Nouveautes {
                 for await l in groupe { lignes += l }
             }
             // 3. Comme Spotify : les artistes similaires (même style, connus ou moins connus) et leurs sorties (Deezer).
-            lignes += await sortiesSimilaires(populaires)
+            if elargi { lignes += await sortiesSimilaires(populaires) }
         }
         await ArtistesSimilaires.partage.sauver()
 
@@ -209,16 +209,35 @@ enum Nouveautes {
         }
     }
 
-    /// Les serveurs d'Apple renvoient souvent des erreurs passagères (502, 504) : jusqu'à 4 essais.
-    private static func telecharger(_ adresse: String) async -> Data? {
+    /// Le serveur des classements Apple reste souvent bloqué 30 s avant d'échouer (504) : chaque réponse est gardée
+    /// sur le téléphone ; moins de 3 h → servie telle quelle ; sinon 2 demandes en parallèle (8 s au plus, 3 essais),
+    /// et en cas d'échec la dernière réponse connue (moins de 3 jours).
+    static func telecharger(_ adresse: String) async -> Data? {
         guard let url = URL(string: adresse) else { return nil }
-        for essai in 0..<4 {
-            var requete = URLRequest(url: url, timeoutInterval: 12)
-            requete.cachePolicy = .reloadIgnoringLocalCacheData
-            if let (donnees, reponse) = try? await URLSession.shared.data(for: requete),
-               (reponse as? HTTPURLResponse)?.statusCode == 200 { return donnees }
-            try? await Task.sleep(for: .milliseconds(700 * (essai + 1)))
+        let dossier = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("FluxApple", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dossier, withIntermediateDirectories: true)
+        // Nom de fichier stable (hashValue change à chaque lancement) : empreinte djb2 de l'adresse.
+        let empreinte = adresse.utf8.reduce(UInt64(5381)) { ($0 &<< 5) &+ $0 &+ UInt64($1) }
+        let fichier = dossier.appendingPathComponent(String(empreinte, radix: 36))
+        let age = (try? fichier.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate).map { Date.now.timeIntervalSince($0) }
+        if let age, age < 3 * 3600, let d = try? Data(contentsOf: fichier) { return d }
+        for essai in 0..<3 {
+            let reponse = await withTaskGroup(of: Data?.self) { g -> Data? in
+                for _ in 0..<2 {
+                    g.addTask {
+                        var r = URLRequest(url: url, timeoutInterval: 8)
+                        r.cachePolicy = .reloadIgnoringLocalCacheData
+                        guard let (d, rep) = try? await URLSession.shared.data(for: r), (rep as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+                        return d
+                    }
+                }
+                for await d in g { if let d { g.cancelAll(); return d } }
+                return nil
+            }
+            if let reponse { try? reponse.write(to: fichier, options: .atomic); return reponse }
+            try? await Task.sleep(for: .milliseconds(500 * (essai + 1)))
         }
+        if let age, age < 3 * 86400 { return try? Data(contentsOf: fichier) }
         return nil
     }
 }

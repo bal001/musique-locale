@@ -220,15 +220,20 @@ struct InnerTube: Sendable {
     }
 
     /// Nouveautés vraiment récentes (voir Nouveautes.swift), gardées 3 heures.
-    func nouveautes(_ codesApple: [String]) async throws -> [Nouveautes.Sortie] {
-        let cle = codesApple.joined(separator: "+")
+    /// `elargi: false` → artistes du moment seulement (2-3 s, pour afficher tout de suite) ;
+    /// `elargi: true` → + leurs artistes similaires (Deezer, plus long la première fois).
+    /// Le calcul tourne à part : quitter la page ne le coupe pas, et une seconde demande attend la première.
+    func nouveautes(_ codesApple: [String], elargi: Bool = true) async throws -> [Nouveautes.Sortie] {
+        let cle = codesApple.joined(separator: "+") + (elargi ? "+similaires" : "")
         if let connu = await CacheNouveautes.partage.lire(cle) { return connu }
-        let sorties = await Nouveautes.sorties(codesApple)
-        // Liste trop courte : le serveur d'Apple a répondu à moitié → on garde la précédente si elle est plus complète.
-        if sorties.count < 5, let precedente = await CacheNouveautes.partage.secours(cle), precedente.count > sorties.count {
-            return precedente
+        let tache = await CacheNouveautes.partage.calcul(cle) { await Nouveautes.sorties(codesApple, elargi: elargi) }
+        let sorties = await tache.value
+        // Résultat incomplet (réseau coupé, serveur d'Apple à moitié) : jamais gardé ; la dernière liste complète sert.
+        if sorties.filter({ !$0.aVenir }).count < 20 {
+            if let precedente = await CacheNouveautes.partage.secours(cle), precedente.count > sorties.count { return precedente }
+            return sorties
         }
-        if !sorties.isEmpty { await CacheNouveautes.partage.ecrire(cle, sorties) }
+        await CacheNouveautes.partage.ecrire(cle, sorties)
         return sorties
     }
 
@@ -285,7 +290,7 @@ actor CacheNouveautes {
     static let partage = CacheNouveautes()
     private var memoire: [String: (date: Date, sorties: [Nouveautes.Sortie])] = [:]
     private struct Sauvegarde: Codable { var date: Date; var sorties: [Nouveautes.Sortie] }
-    private static let prefixe = "nouveautesReleaseRadar-"
+    private static let prefixe = "nouveautesV5-"
 
     func lire(_ pays: String) -> [Nouveautes.Sortie]? {
         guard let m = memoire[pays], Date.now.timeIntervalSince(m.date) < 3 * 3600 else { return nil }
@@ -297,8 +302,16 @@ actor CacheNouveautes {
             UserDefaults.standard.set(donnees, forKey: Self.prefixe + pays)
         }
     }
-    /// Spotify vient d'être branché : les nouveautés sont recalculées.
-    func vider() { memoire = [:] }
+    private var calculs: [String: Task<[Nouveautes.Sortie], Never>] = [:]
+    /// Un seul calcul par pays à la fois, détaché de la page (qui peut être quittée sans l'interrompre).
+    func calcul(_ cle: String, _ travail: @escaping @Sendable () async -> [Nouveautes.Sortie]) -> Task<[Nouveautes.Sortie], Never> {
+        if let t = calculs[cle] { return t }
+        let t = Task.detached { await travail() }
+        calculs[cle] = t
+        Task { _ = await t.value; self.finir(cle) }
+        return t
+    }
+    private func finir(_ cle: String) { calculs[cle] = nil }
     /// Dernière liste valide, si elle a moins de 3 jours.
     func secours(_ pays: String) -> [Nouveautes.Sortie]? {
         guard let donnees = UserDefaults.standard.data(forKey: Self.prefixe + pays),

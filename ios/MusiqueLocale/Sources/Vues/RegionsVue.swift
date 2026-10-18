@@ -55,7 +55,7 @@ struct RangeeNouveautes: View {
         .task(id: pays) {
             elements = nil
             // Aperçu : les albums d'abord, puis les singles, chacun du plus récent au plus ancien.
-            let sorties = await avecEssais(vide: { $0.isEmpty }) { try await InnerTube.partage.nouveautes(pays.codesApple) } ?? []
+            let sorties = await avecEssais(vide: { $0.isEmpty }) { try await InnerTube.partage.nouveautes(pays.codesApple, elargi: false) } ?? []
             let parues = sorties.filter { !$0.aVenir }
             elements = (parues.filter(\.album) + parues.filter { !$0.album }).prefix(30).map(\.element)
         }
@@ -109,10 +109,15 @@ struct NouveautesVue: View {
             sorties = nil
             aVenir = []
             fiches = await GenresArtistes.partage.toutes()
-            let liste = await avecEssais(vide: { $0.isEmpty }) { try await InnerTube.partage.nouveautes(pays.codesApple) } ?? []
-            sorties = liste
+            // 1. Tout de suite : les sorties des artistes du moment. 2. Puis la page s'enrichit des artistes similaires.
+            let rapide = await avecEssais(vide: { $0.isEmpty }) { try await InnerTube.partage.nouveautes(pays.codesApple, elargi: false) } ?? []
+            sorties = rapide
+            aVenir = rapide.filter(\.aVenir).sorted { $0.date < $1.date }.map(\.element)
+            let liste = (try? await InnerTube.partage.nouveautes(pays.codesApple)) ?? rapide
+            guard !Task.isCancelled else { return }
+            if liste.count >= rapide.count { sorties = liste }
             // « À venir » : précommandes des artistes du moment, de la plus proche à la plus lointaine.
-            aVenir = liste.filter(\.aVenir).sorted { $0.date < $1.date }.map(\.element)
+            aVenir = (sorties ?? []).filter(\.aVenir).sorted { $0.date < $1.date }.map(\.element)
             // Artistes inconnus de la table : classés au fur et à mesure (1 par seconde), la page se range toute seule.
             if await GenresArtistes.partage.completer(liste.map(\.artiste)) { fiches = await GenresArtistes.partage.toutes() }
         }
