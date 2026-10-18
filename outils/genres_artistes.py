@@ -22,10 +22,10 @@ def cle(nom):
 def principal(artistes):
     return re.split(r"\s*(?:,|&| feat\.? | ft\.? | x | X | et )\s*", artistes)[0].strip()
 
-LIMITE = time.strftime("%Y-%m-%d", time.gmtime(time.time() - 42 * 86400))
+LIMITE = time.strftime("%Y-%m-%d", time.gmtime(time.time() - 61 * 86400))
 
 def artistes_des_flux():
-    """Artistes des sorties des 6 dernières semaines (les seules affichées dans Nouveautés)."""
+    """Artistes des sorties des 2 derniers mois (les seules affichées dans Nouveautés)."""
     noms = []
     for code in ["fr", "us", "gb"]:
         for t in ["albums", "songs"]:

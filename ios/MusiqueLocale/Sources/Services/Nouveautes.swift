@@ -5,7 +5,7 @@ import Foundation
 //  - les 100 albums et titres les plus écoutés du pays sur Apple Music ;
 //  - les classements iTunes par style (rap, pop, électro, dance, R&B, latino, rock, variété française), qui donnent
 //    assez de sorties dans chaque univers même quand il est peu présent dans le classement général.
-// Filtrées sur les 6 dernières semaines, de la plus récente à la plus ancienne. Toucher une sortie l'ouvre
+// Filtrées sur les 2 derniers mois, de la plus récente à la plus ancienne. Toucher une sortie l'ouvre
 // (album) ou la lance (single) sur YouTube Music.
 enum Nouveautes {
     /// Univers musicaux, dans l'ordre d'affichage.
@@ -88,7 +88,7 @@ enum Nouveautes {
     /// `codes` : pays Apple (fr, us, gb). Plusieurs pays → sorties fusionnées (« International »).
     static func sorties(_ codes: [String]) async -> [Sortie] {
         let aujourdhui = Date.now
-        let limite = Calendar.current.date(byAdding: .day, value: -42, to: aujourdhui) ?? aujourdhui
+        let limite = Calendar.current.date(byAdding: .day, value: -61, to: aujourdhui) ?? aujourdhui
         let format = DateFormatter()
         format.locale = Locale(identifier: "en_US_POSIX")
         format.dateFormat = "yyyy-MM-dd"

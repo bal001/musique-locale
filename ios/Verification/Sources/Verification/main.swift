@@ -127,7 +127,8 @@ await verifier("Paroles synchronisées (LRCLIB)", essais: 2) {
     r.setValue("MusiqueLocale-iOS/1.0", forHTTPHeaderField: "User-Agent")
     let (d, rep) = try await URLSession.shared.data(for: r)
     let code = (rep as? HTTPURLResponse)?.statusCode ?? 0
-    if code == 429 { return nil }   // limite passagère : l'app retombe sur YouTube Music
+    // Limite passagère ou site en panne : l'app retombe alors sur les paroles de YouTube Music.
+    if code == 429 || code >= 500 { print("⚠ LRCLIB indisponible (\(code)), paroles YouTube Music utilisées"); return nil }
     return code == 200 && String(decoding: d, as: UTF8.self).contains("syncedLyrics") ? nil : "réponse \(code)"
 }
 await verifier("Clip : flux vidéo (HLS) et téléchargement (image + son)") {
@@ -166,7 +167,7 @@ await verifier("Vraie durée du titre (le lecteur d'Apple la double)", avertisse
     guard let d = flux.duree else { return "durée absente" }
     return abs(d - 121) <= 2 ? nil : String(format: "durée incorrecte (%.0f s au lieu de 121)", d)
 }
-await verifier("Téléchargement par morceaux (titre complet en < 15 s)") {
+await verifier("Téléchargement par morceaux (titre complet en < 15 s)", avertissementDansLeCloud: true) {
     let flux = try await PrechargeurFlux.partage.flux(pour: "kJQP7kiw5Fk")
     guard let audio = flux.audio else { return "pas de son" }
     let fichier = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".m4a")
