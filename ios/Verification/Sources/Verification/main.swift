@@ -94,6 +94,28 @@ await verifier("Nouveautés par univers (rap, pop, électro…) et albums / sing
     if rapUS.isEmpty { return "rap US vide" }
     return univers.contains(.electro) && univers.contains(.pop) ? nil : "électro ou pop manquant aux États-Unis"
 }
+await verifier("Nouveautés par style précis (trap, drill, rap français, house…)", essais: 2) {
+    let table = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .appendingPathComponent("../../../MusiqueLocale/Resources/genres-artistes.json").standardizedFileURL
+    guard let donnees = try? Data(contentsOf: table),
+          let fiches = try? JSONDecoder().decode([String: GenresArtistes.Fiche].self, from: donnees) else { return "table des styles absente" }
+    var noms: [String: Set<String>] = [:]
+    for (code, nom) in [("fr", "France"), ("us", "États-Unis")] {
+        let sorties = try await it.nouveautes([code])
+        let connus = sorties.filter { fiches[GenresArtistes.cle($0.artiste)]?.styles.isEmpty == false }.count
+        let styles = Dictionary(uniqueKeysWithValues: StyleMusical.ranger(sorties.filter(\.album)) {
+            StyleMusical.pour(fiches[GenresArtistes.cle($0.artiste)], univers: $0.univers, paysPage: code.uppercased())
+        }.map { ($0.style.nom, $0.sorties) })
+        noms[code] = Set(styles.keys)
+        print("   \(nom), albums (\(connus)/\(sorties.count) artistes classés) : " + styles.sorted { $0.value.count > $1.value.count }
+            .map { "\($0.key) \($0.value.count)" }.joined(separator: ", "))
+        if let trap = styles[code == "fr" ? "Trap française" : "Trap américaine"] {
+            print("     ex. : " + trap.prefix(5).map(\.artiste).joined(separator: ", "))
+        }
+    }
+    if noms["fr"]?.contains("Rap français") != true && noms["fr"]?.contains("Trap française") != true { return "pas de rap français" }
+    return noms["us"]?.contains("Trap américaine") == true || noms["us"]?.contains("Rap américain") == true ? nil : "pas de rap américain"
+}
 await verifier("Nouveautés retrouvées sur YouTube Music (album et single)") {
     guard let album = try await it.trouverAlbum("Ninho M.I.L.S 4") else { return "album introuvable" }
     guard let titre = try await it.trouverTitre("Ninho Jefe") else { return "titre introuvable" }

@@ -61,6 +61,7 @@ enum Nouveautes {
         var date: Date
         var album: Bool
         var univers: Univers
+        var artiste: String
     }
 
     // Classement Apple Music (flux récent).
@@ -135,7 +136,7 @@ enum Nouveautes {
             let carte = Carte(idPage: "chercher:\(estSingle ? "titre" : "album"):\(l.artiste) \(nomPropre)",
                               type: .album, nom: nomPropre,
                               sousTitre: "\(nature) • \(l.artiste) • \(date.formatted(affichage))", image: image)
-            trouvees.append(Sortie(element: .carte(carte), date: date, album: !estSingle, univers: Univers.depuis(l.genres)))
+            trouvees.append(Sortie(element: .carte(carte), date: date, album: !estSingle, univers: Univers.depuis(l.genres), artiste: l.artiste))
         }
         return trouvees.sorted { $0.date > $1.date }
     }

@@ -66,15 +66,16 @@ struct NouveautesVue: View {
     @AppStorage("pays") private var pays: Pays = .france
     @AppStorage("nouveautesSingles") private var singles = false
     @State private var sorties: [Nouveautes.Sortie]?
-    @State private var general: PageYTM?
+    @State private var fiches: [String: GenresArtistes.Fiche] = [:]
+    @State private var aVenir: [Element] = []
 
-    /// Une rangée par univers (Rap français, Pop, Électro…), albums ou singles seulement, du plus récent au plus ancien.
+    /// Une rangée par style précis (Trap américaine, Drill UK, Rap français, House…), albums ou singles seulement,
+    /// du plus récent au plus ancien ; les styles les plus fournis d'abord, par famille.
     private var rangees: [Rangee] {
         let choisies = (sorties ?? []).filter { $0.album != singles }
-        return Nouveautes.Univers.allCases.compactMap { u in
-            let elements = choisies.filter { $0.univers == u }.map(\.element)
-            return elements.isEmpty ? nil : Rangee(titre: u.nom(pays), style: .carrousel, elements: elements)
-        }
+        let indice: String? = switch pays { case .france: "FR"; case .etatsUnis: "US"; case .royaumeUni: "GB"; case .international: nil }
+        return StyleMusical.ranger(choisies) { StyleMusical.pour(fiches[GenresArtistes.cle($0.artiste)], univers: $0.univers, paysPage: indice) }
+            .map { Rangee(titre: $0.style.nom, style: .carrousel, elements: $0.sorties.map(\.element)) }
     }
 
     var body: some View {
@@ -89,6 +90,7 @@ struct NouveautesVue: View {
                     .padding(.horizontal, 16)
                 }
                 if let sorties {
+                    if !aVenir.isEmpty { RangeeVue(rangee: Rangee(titre: "À venir", style: .carrousel, elements: aVenir)) }
                     if rangees.isEmpty {
                         ContentUnavailableView(sorties.isEmpty ? "Nouveautés indisponibles" : "Aucune sortie récente",
                                                systemImage: "sparkles", description: Text("Réessaie dans un instant."))
@@ -97,7 +99,6 @@ struct NouveautesVue: View {
                 } else {
                     ProgressView().tint(Palette.citron).frame(maxWidth: .infinity, minHeight: 200)
                 }
-                ForEach(general?.sections.filter { $0.titre.contains("Clips") } ?? []) { RangeeVue(rangee: $0) }
             }
             .padding(.vertical, 8)
         }
@@ -105,9 +106,21 @@ struct NouveautesVue: View {
         .navigationTitle("Nouveautés")
         .task(id: pays) {
             sorties = nil
-            sorties = await avecEssais(vide: { $0.isEmpty }) { try await InnerTube.partage.nouveautes(pays.codesApple) } ?? []
+            aVenir = []
+            fiches = await GenresArtistes.partage.toutes()
+            let liste = await avecEssais(vide: { $0.isEmpty }) { try await InnerTube.partage.nouveautes(pays.codesApple) } ?? []
+            sorties = liste
+            // Artistes inconnus de la table : classés au fur et à mesure (1 par seconde), la page se range toute seule.
+            if await GenresArtistes.partage.completer(liste.map(\.artiste)) { fiches = await GenresArtistes.partage.toutes() }
         }
-        .task { general = try? await InnerTube.partage.page("FEmusic_new_releases") }
+        .task(id: pays) {
+            // « À venir » : les prochaines sorties datées des artistes les plus présents dans les nouveautés du pays.
+            let liste = await avecEssais(vide: { $0.isEmpty }) { try await InnerTube.partage.nouveautes(pays.codesApple) } ?? []
+            let artistes = Dictionary(grouping: liste.map { GenresArtistes.premierArtiste($0.artiste) }, by: { $0 })
+                .sorted { $0.value.count > $1.value.count }.prefix(15).map(\.key)
+            let code = pays.codesApple.first ?? "fr"
+            aVenir = await VeilleSorties.partage.sorties(de: artistes, pays: code).aVenir.map { .carte($0.carte(aVenir: true)) }
+        }
     }
 
     private func puce(_ texte: String, choisie: Bool, action: @escaping () -> Void) -> some View {
