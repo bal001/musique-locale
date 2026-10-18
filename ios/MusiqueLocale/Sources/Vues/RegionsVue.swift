@@ -56,7 +56,8 @@ struct RangeeNouveautes: View {
             elements = nil
             // Aperçu : les albums d'abord, puis les singles, chacun du plus récent au plus ancien.
             let sorties = await avecEssais(vide: { $0.isEmpty }) { try await InnerTube.partage.nouveautes(pays.codesApple, elargi: false) } ?? []
-            let parues = sorties.filter { !$0.aVenir }
+            let fiches = await GenresArtistes.partage.toutes()
+            let parues = sorties.filter { !$0.aVenir && pays.accepte($0, fiche: fiches[GenresArtistes.cle($0.artiste)]) }
             elements = (parues.filter(\.album) + parues.filter { !$0.album }).prefix(30).map(\.element)
         }
     }
@@ -72,7 +73,7 @@ struct NouveautesVue: View {
     /// Une rangée par style précis (Trap américaine, Drill UK, Rap français, House…), albums ou singles seulement,
     /// de la plus récente à celle d'il y a 4 mois ; les styles les plus fournis d'abord, par famille.
     private var rangees: [Rangee] {
-        let choisies = (sorties ?? []).filter { $0.album != singles && !$0.aVenir }
+        let choisies = (sorties ?? []).filter { $0.album != singles && !$0.aVenir && pays.accepte($0, fiche: fiches[GenresArtistes.cle($0.artiste)]) }
         let indice: String? = switch pays { case .france: "FR"; case .etatsUnis: "US"; case .royaumeUni: "GB"; case .international: nil }
         return StyleMusical.ranger(choisies) { StyleMusical.pour(fiches[GenresArtistes.cle($0.artiste)], univers: $0.univers, paysPage: indice) }
             .map { Rangee(titre: $0.style.nom, style: .carrousel, elements: $0.sorties.map(\.element)) }

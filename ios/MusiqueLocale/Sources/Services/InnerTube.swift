@@ -333,7 +333,7 @@ actor CacheNouveautes {
     static let partage = CacheNouveautes()
     private var memoire: [String: (date: Date, sorties: [Nouveautes.Sortie])] = [:]
     private struct Sauvegarde: Codable { var date: Date; var sorties: [Nouveautes.Sortie] }
-    private static let prefixe = "nouveautesV5-"
+    private static let prefixe = "nouveautesV6-"
 
     func lire(_ pays: String) -> [Nouveautes.Sortie]? {
         guard let m = memoire[pays], Date.now.timeIntervalSince(m.date) < 3 * 3600 else { return nil }

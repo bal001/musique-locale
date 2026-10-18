@@ -62,6 +62,7 @@ enum Nouveautes {
         var univers: Univers
         var artiste: String
         var aVenir = false     // précommande : sortie datée dans les 4 prochains mois
+        var similaire = false  // ajoutée par les artistes similaires (Deezer), pas par le classement du pays
     }
 
     // Classement Apple Music (flux récent).
@@ -158,7 +159,7 @@ enum Nouveautes {
             let carte = Carte(idPage: "chercher:\(estSingle ? "titre" : "album"):\(l.artiste) \(nomPropre)",
                               type: .album, nom: nomPropre, sousTitre: "\(nature) • \(l.artiste) • \(quand)", image: image)
             trouvees.append(Sortie(element: .carte(carte), date: date, album: !estSingle, univers: l.univers ?? Univers.depuis(l.genres),
-                                   artiste: l.artiste, aVenir: aVenir))
+                                   artiste: l.artiste, aVenir: aVenir, similaire: l.univers != nil))
         }
         return trouvees.sorted { $0.date > $1.date }
     }
@@ -262,6 +263,28 @@ enum Pays: String, CaseIterable, Identifiable {
         case .royaumeUni: ["gb"]
         case .international: ["us", "gb"]
         }
+    }
+}
+
+extension Pays {
+    /// Pays d'origine des artistes affichés dans les nouveautés de ce pays (comme Spotify : « France » = artistes français
+    /// et francophones, « États-Unis » = artistes américains et canadiens…). `nil` = tous (International).
+    var originesArtistes: Set<String>? {
+        switch self {
+        case .france: ["FR", "BE", "CH", "LU", "MC", "CI", "CM", "CD", "CG", "SN", "ML", "GN", "BF", "GA", "TG", "BJ", "MA", "DZ", "TN",
+                       "HT", "RE", "GP", "MQ", "GF", "YT", "KM", "MG"]
+        case .etatsUnis: ["US", "CA", "PR"]
+        case .royaumeUni: ["GB", "IE"]
+        case .international: nil
+        }
+    }
+
+    /// Une sortie a-t-elle sa place dans les nouveautés de ce pays ? Origine connue (MusicBrainz) : elle doit correspondre ;
+    /// inconnue : seulement si elle vient du classement du pays lui-même (jamais par les artistes similaires).
+    func accepte(_ s: Nouveautes.Sortie, fiche: GenresArtistes.Fiche?) -> Bool {
+        guard let origines = originesArtistes else { return true }
+        if let pays = fiche?.pays { return origines.contains(pays) }
+        return !s.similaire
     }
 }
 

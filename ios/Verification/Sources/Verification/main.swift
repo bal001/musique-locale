@@ -131,7 +131,8 @@ await verifier("Nouveautés par style précis (trap, drill, rap français, house
         debut = Date()
         let toutes = try await it.nouveautes([code])
         print("   \(nom) : avec similaires \(toutes.filter { !$0.aVenir }.count) sorties en \(String(format: "%.1f", Date().timeIntervalSince(debut))) s")
-        let sorties = toutes.filter { !$0.aVenir }
+        let paysPage: Pays = code == "fr" ? .france : .etatsUnis
+        let sorties = toutes.filter { !$0.aVenir && paysPage.accepte($0, fiche: fiches[GenresArtistes.cle($0.artiste)]) }
         
         let connus = sorties.filter { fiches[GenresArtistes.cle($0.artiste)]?.styles.isEmpty == false }.count
         let styles = Dictionary(uniqueKeysWithValues: StyleMusical.ranger(sorties.filter(\.album)) {
@@ -144,6 +145,7 @@ await verifier("Nouveautés par style précis (trap, drill, rap français, house
             print("     \(style) : " + liste.prefix(6).map(\.artiste).joined(separator: ", "))
         }
     }
+    if noms["fr"]?.contains(where: { $0.contains("américain") || $0.contains("américaine") }) == true { return "style américain dans la page France" }
     if noms["fr"]?.contains("Rap français") != true && noms["fr"]?.contains("Trap française") != true { return "pas de rap français" }
     return noms["us"]?.contains("Trap américaine") == true || noms["us"]?.contains("Rap américain") == true ? nil : "pas de rap américain"
 }
