@@ -25,21 +25,36 @@ def principal(artistes):
 LIMITE = time.strftime("%Y-%m-%d", time.gmtime(time.time() - 61 * 86400))
 
 def artistes_des_flux():
-    """Artistes des sorties des 2 derniers mois (les seules affichées dans Nouveautés)."""
+    """Artistes des nouveautés (méthode « Release Radar » de l'app) : artistes les plus écoutés d'Apple Music
+    et toutes leurs sorties des 2 derniers mois."""
     noms = []
     for code in ["fr", "us", "gb"]:
+        ids = []
         for t in ["albums", "songs"]:
             d = get(f"https://rss.marketingtools.apple.com/api/v2/{code}/music/most-played/100/{t}.json")
-            noms += [r["artistName"] for r in (d or {}).get("feed", {}).get("results", []) if r.get("releaseDate", "") >= LIMITE]
-        for g in [18, 14, 7, 17, 15, 12, 21] + ([50000064] if code == "fr" else []):
-            for t in ["topalbums", "topsongs"]:
-                d = get(f"https://itunes.apple.com/{code}/rss/{t}/limit=100/genre={g}/json")
-                noms += [e["im:artist"]["label"] for e in (d or {}).get("feed", {}).get("entry", []) if e.get("im:releaseDate", {}).get("label", "") >= LIMITE]
+            for r in (d or {}).get("feed", {}).get("results", []):
+                noms.append(r["artistName"])
+                if r.get("artistId") and r["artistId"] not in ids: ids.append(r["artistId"])
+        for i in range(0, len(ids), 40):
+            d = get(f"https://itunes.apple.com/lookup?id={','.join(ids[i:i+40])}&entity=album&sort=recent&limit=8&country={code}")
+            noms += [r["artistName"] for r in (d or {}).get("results", [])
+                     if r.get("wrapperType") == "collection" and r.get("releaseDate", "") >= LIMITE]
     vus, res = set(), []
     for n in noms:
         p = principal(n)
         if p and cle(p) not in vus:
             vus.add(cle(p)); res.append(p)
+    # Comme l'app : les artistes similaires (Deezer) des 100 premiers artistes de chaque pays.
+    for p in list(res)[:300]:
+        d = get("https://api.deezer.com/search/artist?q=" + urllib.parse.quote(p) + "&limit=10") or {}
+        meme = [a for a in d.get("data", []) if cle(a.get("name", "")) == cle(p)]
+        if not meme: continue
+        a = max(meme, key=lambda a: a.get("nb_fan", 0))
+        rel = get(f"https://api.deezer.com/artist/{a['id']}/related?limit=12") or {}
+        for r in rel.get("data", []):
+            if cle(r["name"]) not in vus:
+                vus.add(cle(r["name"])); res.append(r["name"])
+        time.sleep(0.15)
     return res
 
 def fiche(nom):

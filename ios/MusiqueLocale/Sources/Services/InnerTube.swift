@@ -285,7 +285,7 @@ actor CacheNouveautes {
     static let partage = CacheNouveautes()
     private var memoire: [String: (date: Date, sorties: [Nouveautes.Sortie])] = [:]
     private struct Sauvegarde: Codable { var date: Date; var sorties: [Nouveautes.Sortie] }
-    private static let prefixe = "nouveautesParStyle-"
+    private static let prefixe = "nouveautesReleaseRadar-"
 
     func lire(_ pays: String) -> [Nouveautes.Sortie]? {
         guard let m = memoire[pays], Date.now.timeIntervalSince(m.date) < 3 * 3600 else { return nil }
@@ -297,6 +297,8 @@ actor CacheNouveautes {
             UserDefaults.standard.set(donnees, forKey: Self.prefixe + pays)
         }
     }
+    /// Spotify vient d'être branché : les nouveautés sont recalculées.
+    func vider() { memoire = [:] }
     /// Dernière liste valide, si elle a moins de 3 jours.
     func secours(_ pays: String) -> [Nouveautes.Sortie]? {
         guard let donnees = UserDefaults.standard.data(forKey: Self.prefixe + pays),

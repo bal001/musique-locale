@@ -48,7 +48,7 @@ actor GenresArtistes {
     func fiche(_ artistes: String) -> Fiche? { fiches[Self.cle(artistes)] }
     func toutes() -> [String: Fiche] { fiches }
 
-    /// Cherche les artistes encore inconnus (60 au plus par appel, 1 par seconde). Renvoie vrai si des fiches ont été ajoutées.
+    /// Cherche les artistes encore inconnus (200 au plus par appel, 1 par seconde). Renvoie vrai si des fiches ont été ajoutées.
     func completer(_ artistes: [String]) async -> Bool {
         guard !enCours else { return false }
         enCours = true
@@ -60,7 +60,7 @@ actor GenresArtistes {
             guard let f = fiches[c] else { return true }
             if let d = f.date, f.styles.isEmpty, Date.now.timeIntervalSince(d) > 30 * 86400 { return true }
             return false
-        }.prefix(60)
+        }.prefix(200)
         guard !manquants.isEmpty else { return false }
         for nom in manquants {
             if Task.isCancelled { break }
@@ -105,7 +105,7 @@ struct StyleMusical: Hashable, Sendable {
     /// Style précis à partir de la fiche MusicBrainz ; à défaut, l'univers donné par Apple.
     /// `paysPage` : pays des nouveautés affichées, supposé être celui d'un artiste dont l'origine est inconnue.
     static func pour(_ fiche: GenresArtistes.Fiche?, univers: Nouveautes.Univers, paysPage: String? = nil) -> StyleMusical {
-        let origine: Origine? = switch fiche?.pays ?? paysPage {
+        let origine: Origine? = switch fiche?.pays ?? (univers == .rap || univers == .rnb ? paysPage : nil) {
         case "FR", "BE", "CH", "LU", "MC": .fr
         case "US": .us
         case "GB", "IE": .uk
@@ -189,7 +189,8 @@ extension StyleMusical {
         let autres = StyleMusical(cle: "autres", nom: "Autres styles", famille: 12)
         for (s, liste) in groupes where liste.count < 3 && s != autres {
             let cible = groupes.filter { $0.key.famille == s.famille && $0.key != s && $0.value.count >= 3 }
-                .max { $0.value.count < $1.value.count }?.key ?? autres
+                .max { $0.value.count < $1.value.count }?.key ?? (s.famille <= 4 ? s : autres)
+            guard cible != s else { continue }   // rap, R&B, afro, pop : une petite rangée vaut mieux que « Autres styles »
             groupes[s] = nil
             groupes[cible, default: []] += liste
         }

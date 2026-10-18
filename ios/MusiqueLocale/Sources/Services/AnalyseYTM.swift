@@ -144,7 +144,9 @@ enum AnalyseYTM {
             }
         }
         viderVrac()
-        return resultat.filter { !$0.titre.localizedCaseInsensitiveContains("podcast") && !$0.titre.localizedCaseInsensitiveContains("épisode") }
+        // Ni podcasts, ni épisodes, ni clips vidéo (« Nouveaux clips musicaux », « Top music videos ») : l'app ne lit que le son.
+        let exclus = ["podcast", "épisode", "clip", "music video"]
+        return resultat.filter { r in !exclus.contains { r.titre.localizedCaseInsensitiveContains($0) } }
     }
 
     static func elements(_ contenus: Any?) -> [Element] {

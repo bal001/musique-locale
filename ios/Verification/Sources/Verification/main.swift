@@ -101,7 +101,9 @@ await verifier("Nouveautés par style précis (trap, drill, rap français, house
           let fiches = try? JSONDecoder().decode([String: GenresArtistes.Fiche].self, from: donnees) else { return "table des styles absente" }
     var noms: [String: Set<String>] = [:]
     for (code, nom) in [("fr", "France"), ("us", "États-Unis")] {
-        let sorties = try await it.nouveautes([code])
+        let toutes = try await it.nouveautes([code])
+        let sorties = toutes.filter { !$0.aVenir }
+        print("   \(nom) à venir : " + toutes.filter(\.aVenir).prefix(5).map { if case .carte(let c) = $0.element { c.sousTitre } else { "" } }.joined(separator: " | "))
         let connus = sorties.filter { fiches[GenresArtistes.cle($0.artiste)]?.styles.isEmpty == false }.count
         let styles = Dictionary(uniqueKeysWithValues: StyleMusical.ranger(sorties.filter(\.album)) {
             StyleMusical.pour(fiches[GenresArtistes.cle($0.artiste)], univers: $0.univers, paysPage: code.uppercased())
@@ -109,8 +111,8 @@ await verifier("Nouveautés par style précis (trap, drill, rap français, house
         noms[code] = Set(styles.keys)
         print("   \(nom), albums (\(connus)/\(sorties.count) artistes classés) : " + styles.sorted { $0.value.count > $1.value.count }
             .map { "\($0.key) \($0.value.count)" }.joined(separator: ", "))
-        if let trap = styles[code == "fr" ? "Trap française" : "Trap américaine"] {
-            print("     ex. : " + trap.prefix(5).map(\.artiste).joined(separator: ", "))
+        for (style, liste) in styles.sorted(by: { $0.value.count > $1.value.count }).prefix(6) {
+            print("     \(style) : " + liste.prefix(6).map(\.artiste).joined(separator: ", "))
         }
     }
     if noms["fr"]?.contains("Rap français") != true && noms["fr"]?.contains("Trap française") != true { return "pas de rap français" }

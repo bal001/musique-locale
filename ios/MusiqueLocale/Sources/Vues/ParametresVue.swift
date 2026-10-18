@@ -9,6 +9,9 @@ struct ParametresVue: View {
     @State private var tailleCache: Int64 = 0
     @State private var tailleTelechargements: Int64 = 0
     @State private var confirmer = false
+    @State private var spotifyID = Spotify.clientID
+    @State private var spotifySecret = ""
+    @State private var spotifyEtat: String? = Spotify.estBranche ? "Branché" : nil
 
     var body: some View {
         @Bindable var lecteur = lecteur
@@ -71,6 +74,31 @@ struct ParametresVue: View {
                 section("Nouveautés et classements") {
                     Text("Pays").font(.system(size: 13)).foregroundStyle(Palette.texte2)
                     PucesPays(pays: $pays).padding(.horizontal, -16)
+                }
+
+                section("Spotify") {
+                    Text("Ajoute les nouveautés de Spotify à celles d'Apple Music et Deezer. Le secret reste dans ton iPhone.")
+                        .font(.system(size: 13)).foregroundStyle(Palette.texte2)
+                    TextField("Client ID", text: $spotifyID).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .font(.system(size: 14).monospaced())
+                    SecureField(Spotify.estBranche ? "Client Secret (déjà enregistré)" : "Colle ici le Client Secret", text: $spotifySecret)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled().font(.system(size: 14).monospaced())
+                    HStack {
+                        Button("Enregistrer") {
+                            Spotify.clientID = spotifyID.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if !spotifySecret.isEmpty { Spotify.secret = spotifySecret.trimmingCharacters(in: .whitespacesAndNewlines) }
+                            spotifySecret = ""
+                            spotifyEtat = "Vérification…"
+                            Task {
+                                let ok = await Spotify.tester()
+                                spotifyEtat = ok ? "Branché" : "Refusé par Spotify : vérifie l'ID et le secret"
+                                if ok { await CacheNouveautes.partage.vider() }
+                            }
+                        }
+                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.citron)
+                        Spacer()
+                        if let spotifyEtat { Text(spotifyEtat).font(.system(size: 13)).foregroundStyle(spotifyEtat == "Branché" ? Palette.citron : Palette.texte2) }
+                    }
                 }
 
                 section("Stockage") {

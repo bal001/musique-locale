@@ -56,7 +56,8 @@ struct RangeeNouveautes: View {
             elements = nil
             // Aperçu : les albums d'abord, puis les singles, chacun du plus récent au plus ancien.
             let sorties = await avecEssais(vide: { $0.isEmpty }) { try await InnerTube.partage.nouveautes(pays.codesApple) } ?? []
-            elements = (sorties.filter(\.album) + sorties.filter { !$0.album }).prefix(30).map(\.element)
+            let parues = sorties.filter { !$0.aVenir }
+            elements = (parues.filter(\.album) + parues.filter { !$0.album }).prefix(30).map(\.element)
         }
     }
 }
@@ -72,7 +73,7 @@ struct NouveautesVue: View {
     /// Une rangée par style précis (Trap américaine, Drill UK, Rap français, House…), albums ou singles seulement,
     /// du plus récent au plus ancien ; les styles les plus fournis d'abord, par famille.
     private var rangees: [Rangee] {
-        let choisies = (sorties ?? []).filter { $0.album != singles }
+        let choisies = (sorties ?? []).filter { $0.album != singles && !$0.aVenir }
         let indice: String? = switch pays { case .france: "FR"; case .etatsUnis: "US"; case .royaumeUni: "GB"; case .international: nil }
         return StyleMusical.ranger(choisies) { StyleMusical.pour(fiches[GenresArtistes.cle($0.artiste)], univers: $0.univers, paysPage: indice) }
             .map { Rangee(titre: $0.style.nom, style: .carrousel, elements: $0.sorties.map(\.element)) }
@@ -110,16 +111,10 @@ struct NouveautesVue: View {
             fiches = await GenresArtistes.partage.toutes()
             let liste = await avecEssais(vide: { $0.isEmpty }) { try await InnerTube.partage.nouveautes(pays.codesApple) } ?? []
             sorties = liste
+            // « À venir » : précommandes des artistes du moment, de la plus proche à la plus lointaine.
+            aVenir = liste.filter(\.aVenir).sorted { $0.date < $1.date }.map(\.element)
             // Artistes inconnus de la table : classés au fur et à mesure (1 par seconde), la page se range toute seule.
             if await GenresArtistes.partage.completer(liste.map(\.artiste)) { fiches = await GenresArtistes.partage.toutes() }
-        }
-        .task(id: pays) {
-            // « À venir » : les prochaines sorties datées des artistes les plus présents dans les nouveautés du pays.
-            let liste = await avecEssais(vide: { $0.isEmpty }) { try await InnerTube.partage.nouveautes(pays.codesApple) } ?? []
-            let artistes = Dictionary(grouping: liste.map { GenresArtistes.premierArtiste($0.artiste) }, by: { $0 })
-                .sorted { $0.value.count > $1.value.count }.prefix(15).map(\.key)
-            let code = pays.codesApple.first ?? "fr"
-            aVenir = await VeilleSorties.partage.sorties(de: artistes, pays: code).aVenir.map { .carte($0.carte(aVenir: true)) }
         }
     }
 
