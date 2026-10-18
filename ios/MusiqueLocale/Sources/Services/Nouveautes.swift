@@ -133,13 +133,7 @@ enum Nouveautes {
                 }
                 for await l in groupe { lignes += l }
             }
-            // 3. Nouveautés Spotify du pays (si la clé est branchée dans Paramètres).
-            for s in await Spotify.nouveautes(code) {
-                let nom = s.type == "single" ? s.nom + " - Single" : s.type == "compilation" ? s.nom : s.nom
-                lignes.append((s.type != "single", s.artiste, nom, s.date, s.image, [], nil))
-                populaires.append(s.artiste)
-            }
-            // 4. Comme Spotify : les artistes similaires (même style, connus ou moins connus) et leurs sorties (Deezer).
+            // 3. Comme Spotify : les artistes similaires (même style, connus ou moins connus) et leurs sorties (Deezer).
             lignes += await sortiesSimilaires(populaires)
         }
         await ArtistesSimilaires.partage.sauver()
