@@ -91,7 +91,14 @@ await verifier("Puces d'humeur de l'accueil") {
 await verifier("Humeurs et genres") { try await it.page("FEmusic_moods_and_genres").sections.isEmpty ? "vide" : nil }
 await verifier("Playlist de l'accueil (en-tête et titres)") {
     // Playlist prise sur l'accueil du jour : toujours disponible là où le test tourne.
-    let accueil = try await it.page("FEmusic_home")
+    // Comme l'app : la 1re page de l'accueil puis sa suite (les playlists y sont souvent).
+    var accueil = try await it.page("FEmusic_home")
+    var jeton = accueil.suite
+    for _ in 0..<3 {
+        guard let j = jeton, let suite = try? await it.suitePage(j) else { break }
+        accueil.sections += suite.sections
+        jeton = suite.suite
+    }
     guard let carte = accueil.sections.flatMap(\.elements).lazy.compactMap({ e -> Carte? in
         if case .carte(let c) = e, c.type == .playlist { c } else { nil }
     }).first else { return "aucune playlist sur l'accueil" }
